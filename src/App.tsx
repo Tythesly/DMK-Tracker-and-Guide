@@ -1,45 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import Database from "@tauri-apps/plugin-sql";
+
+import type {
+  Character,
+  CharacterProgressRow,
+  LevelRequirement,
+  SaveStatus,
+  Token,
+  TokenInventoryRow,
+  TokenQuantities,
+} from "./types/dmk";
+
 import "./App.css";
-
-type Character = {
-  id: string;
-  display_name: string;
-  max_level: number;
-  collection_name: string;
-};
-
-type Token = {
-  id: string;
-  display_name: string;
-  token_type: string;
-};
-
-type LevelRequirement = {
-  target_level: number;
-  token_id: string;
-  token_name: string;
-  quantity: number;
-};
-
-type CharacterProgressRow = {
-  is_unlocked: number;
-  current_level: number;
-};
-
-type TokenInventoryRow = {
-  token_id: string;
-  quantity: number;
-};
-
-type TokenQuantities = Record<string, number>;
-
-type SaveStatus =
-  | "idle"
-  | "pending"
-  | "saving"
-  | "saved"
-  | "error";
 
 function App() {
   const [character, setCharacter] = useState<Character | null>(null);
