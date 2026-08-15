@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-import { loadCharacterGameData } from "./data/gameData";
+import {
+  getAllCharacters,
+  loadCharacterGameData,
+} from "./data/gameData";
 
 import {
   loadCharacterPlayerProgress,
@@ -17,9 +20,15 @@ import type {
 
 import "./App.css";
 
-const TEST_CHARACTER_ID = "character_mickey_mouse";
-
 function App() {
+  const [characters, setCharacters] =
+    useState<Character[]>([]);
+
+  const [
+    selectedCharacterId,
+    setSelectedCharacterId,
+  ] = useState("");
+
   const [character, setCharacter] =
     useState<Character | null>(null);
 
@@ -38,8 +47,15 @@ function App() {
   const [tokenQuantities, setTokenQuantities] =
     useState<TokenQuantities>({});
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loadingCharacters,
+    setLoadingCharacters,
+  ] = useState(true);
+
+  const [
+    loadingCharacter,
+    setLoadingCharacter,
+  ] = useState(false);
 
   const [saveStatus, setSaveStatus] =
     useState<SaveStatus>("idle");
@@ -53,21 +69,88 @@ function App() {
   const editVersionRef = useRef(0);
 
   useEffect(() => {
-    async function loadData() {
+    let cancelled = false;
+
+    async function loadCharacterList() {
+      try {
+        const loadedCharacters =
+          await getAllCharacters();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (loadedCharacters.length === 0) {
+          throw new Error(
+            "No active characters were found in the game database.",
+          );
+        }
+
+        setCharacters(loadedCharacters);
+
+        setSelectedCharacterId(
+          loadedCharacters[0].id,
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(
+            err instanceof Error
+              ? err.message
+              : String(err),
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCharacters(false);
+        }
+      }
+    }
+
+    loadCharacterList();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCharacterId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSelectedCharacter() {
+      editVersionRef.current += 1;
+
+      setLoadingCharacter(true);
+      setLoadError(null);
+      setSaveError(null);
+      setSaveStatus("idle");
+
+      setCharacter(null);
+      setTokens([]);
+      setRequirements([]);
+      setTokenQuantities({});
+
       try {
         const {
           character: loadedCharacter,
           tokens: loadedTokens,
           requirements: loadedRequirements,
         } = await loadCharacterGameData(
-          TEST_CHARACTER_ID,
+          selectedCharacterId,
         );
 
         const playerProgress =
           await loadCharacterPlayerProgress(
-            TEST_CHARACTER_ID,
+            selectedCharacterId,
             loadedTokens,
           );
+
+        if (cancelled) {
+          return;
+        }
 
         setCharacter(loadedCharacter);
         setTokens(loadedTokens);
@@ -85,18 +168,26 @@ function App() {
           playerProgress.tokenQuantities,
         );
       } catch (err) {
-        setLoadError(
-          err instanceof Error
-            ? err.message
-            : String(err),
-        );
+        if (!cancelled) {
+          setLoadError(
+            err instanceof Error
+              ? err.message
+              : String(err),
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoadingCharacter(false);
+        }
       }
     }
 
-    loadData();
-  }, []);
+    loadSelectedCharacter();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCharacterId]);
 
   function markEdited() {
     editVersionRef.current += 1;
@@ -153,7 +244,7 @@ function App() {
 
   useEffect(() => {
     if (
-      loading ||
+      loadingCharacter ||
       !character ||
       saveStatus !== "pending"
     ) {
@@ -210,27 +301,25 @@ function App() {
     character,
     currentLevel,
     isUnlocked,
-    loading,
+    loadingCharacter,
     saveStatus,
     tokenQuantities,
     tokens,
   ]);
 
-  if (loading) {
+  if (loadingCharacters) {
     return (
       <main className="container">
         <h1>
           DMK Complete Tracker & Guide
         </h1>
 
-        <p>
-          Loading character and player data...
-        </p>
+        <p>Loading characters...</p>
       </main>
     );
   }
 
-  if (loadError || !character) {
+  if (loadError) {
     return (
       <main className="container">
         <h1>
@@ -241,9 +330,23 @@ function App() {
           Unable to load tracker data
         </h2>
 
+        <p>{loadError}</p>
+      </main>
+    );
+  }
+
+  if (
+    loadingCharacter ||
+    !character
+  ) {
+    return (
+      <main className="container">
+        <h1>
+          DMK Complete Tracker & Guide
+        </h1>
+
         <p>
-          {loadError ??
-            "Character data was unavailable."}
+          Loading selected character...
         </p>
       </main>
     );
@@ -263,6 +366,11 @@ function App() {
             nextLevel,
         );
 
+  const characterSelectionDisabled =
+    loadingCharacter ||
+    saveStatus === "pending" ||
+    saveStatus === "saving";
+
   return (
     <main className="container">
       <h1>
@@ -270,6 +378,46 @@ function App() {
       </h1>
 
       <section>
+        <p>
+          <label htmlFor="character-select">
+            <strong>Character:</strong>{" "}
+          </label>
+
+          <select
+            id="character-select"
+            value={selectedCharacterId}
+            disabled={
+              characterSelectionDisabled
+            }
+            onChange={(event) =>
+              setSelectedCharacterId(
+                event.currentTarget.value,
+              )
+            }
+          >
+            {characters.map(
+              (availableCharacter) => (
+                <option
+                  key={
+                    availableCharacter.id
+                  }
+                  value={
+                    availableCharacter.id
+                  }
+                >
+                  {
+                    availableCharacter.display_name
+                  }{" "}
+                  —{" "}
+                  {
+                    availableCharacter.collection_name
+                  }
+                </option>
+              ),
+            )}
+          </select>
+        </p>
+
         <h2>
           {character.display_name}
         </h2>
