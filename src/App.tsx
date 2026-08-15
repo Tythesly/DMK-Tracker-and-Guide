@@ -2,224 +2,142 @@ import { useEffect, useState } from "react";
 import Database from "@tauri-apps/plugin-sql";
 import "./App.css";
 
-type TableRow = {
-  name: string;
-};
-
-type MetadataRow = {
-  value: string;
-};
-
-type DatabaseCheck = {
+type VerificationResult = {
   status: "checking" | "ok" | "error";
-  foundTables: string[];
-  schemaVersion: string | null;
-  error: string | null;
+  message: string;
 };
 
-const gameTables = [
-  "metadata",
-  "collections",
-  "characters",
-  "tokens",
-  "character_levels",
-  "character_level_token_requirements",
-  "aliases",
-];
-
-const playerTables = [
-  "metadata",
-  "character_progress",
-  "token_inventory",
-];
-
-const initialCheck: DatabaseCheck = {
-  status: "checking",
-  foundTables: [],
-  schemaVersion: null,
-  error: null,
+type CountRow = {
+  count: number;
 };
 
-async function checkDatabase(
-  databasePath: string,
-  expectedTables: string[],
-): Promise<DatabaseCheck> {
-  try {
-    const db = Database.get(databasePath);
-
-    const tableRows = await db.select<TableRow[]>(
-      `
-        SELECT name
-        FROM sqlite_master
-        WHERE type = 'table'
-          AND name NOT LIKE 'sqlite_%'
-        ORDER BY name
-      `,
-    );
-
-    const foundTables = tableRows
-      .map((row) => row.name)
-      .filter((name) => name !== "_sqlx_migrations");
-
-    const metadataRows = await db.select<MetadataRow[]>(
-      `
-        SELECT value
-        FROM metadata
-        WHERE key = 'schema_version'
-        LIMIT 1
-      `,
-    );
-
-    const missingTables = expectedTables.filter(
-      (table) => !foundTables.includes(table),
-    );
-
-    if (missingTables.length > 0) {
-      return {
-        status: "error",
-        foundTables,
-        schemaVersion: metadataRows[0]?.value ?? null,
-        error: `Missing tables: ${missingTables.join(", ")}`,
-      };
-    }
-
-    return {
-      status: "ok",
-      foundTables,
-      schemaVersion: metadataRows[0]?.value ?? null,
-      error: null,
-    };
-  } catch (error) {
-    return {
-      status: "error",
-      foundTables: [],
-      schemaVersion: null,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function DatabaseResult({
-  title,
-  fileName,
-  expectedTables,
-  result,
-}: {
-  title: string;
-  fileName: string;
-  expectedTables: string[];
-  result: DatabaseCheck;
-}) {
-  return (
-    <section>
-      <h2>{title}</h2>
-
-      <p>
-        <strong>Database:</strong> {fileName}
-      </p>
-
-      <p>
-        <strong>Status:</strong>{" "}
-        {result.status === "checking" && "Checking..."}
-        {result.status === "ok" && "✓ Passed"}
-        {result.status === "error" && "✗ Failed"}
-      </p>
-
-      {result.schemaVersion && (
-        <p>
-          <strong>Schema Version:</strong> {result.schemaVersion}
-        </p>
-      )}
-
-      <h3>Required Tables</h3>
-
-      <ul>
-        {expectedTables.map((table) => {
-          const found = result.foundTables.includes(table);
-
-          return (
-            <li key={table}>
-              {result.status === "checking" ? "…" : found ? "✓" : "✗"} {table}
-            </li>
-          );
-        })}
-      </ul>
-
-      {result.error && (
-        <p>
-          <strong>Error:</strong> {result.error}
-        </p>
-      )}
-    </section>
-  );
-}
+type CharacterRow = {
+  display_name: string;
+  max_level: number;
+};
 
 function App() {
-  const [gameDatabase, setGameDatabase] =
-    useState<DatabaseCheck>(initialCheck);
-
-  const [playerDatabase, setPlayerDatabase] =
-    useState<DatabaseCheck>(initialCheck);
+  const [result, setResult] = useState<VerificationResult>({
+    status: "checking",
+    message: "Checking Mickey Mouse development data...",
+  });
 
   useEffect(() => {
     let cancelled = false;
 
-    async function verifyDatabases() {
-      const gameResult = await checkDatabase(
-        "sqlite:dmk-data.db",
-        gameTables,
-      );
+    async function verifyMickeyData() {
+      try {
+        const db = Database.get("sqlite:dmk-data.db");
 
-      if (!cancelled) {
-        setGameDatabase(gameResult);
-      }
+        const character = await db.select<CharacterRow[]>(
+          `
+          SELECT display_name, max_level
+          FROM characters
+          WHERE id = 'character_mickey_mouse'
+          `,
+        );
 
-      const playerResult = await checkDatabase(
-        "sqlite:dmk-player.db",
-        playerTables,
-      );
+        const tokens = await db.select<CountRow[]>(
+          `
+          SELECT COUNT(*) AS count
+          FROM tokens
+          WHERE associated_character_id = 'character_mickey_mouse'
+             OR associated_collection_id = 'collection_mickey_friends'
+          `,
+        );
 
-      if (!cancelled) {
-        setPlayerDatabase(playerResult);
+        const levels = await db.select<CountRow[]>(
+          `
+          SELECT COUNT(*) AS count
+          FROM character_levels
+          WHERE character_id = 'character_mickey_mouse'
+          `,
+        );
+
+        const requirements = await db.select<CountRow[]>(
+          `
+          SELECT COUNT(*) AS count
+          FROM character_level_token_requirements
+          WHERE character_id = 'character_mickey_mouse'
+          `,
+        );
+
+        const characterFound =
+          character.length === 1 &&
+          character[0].display_name === "Mickey Mouse" &&
+          character[0].max_level === 10;
+
+        const tokenCount = Number(tokens[0]?.count ?? 0);
+        const levelCount = Number(levels[0]?.count ?? 0);
+        const requirementCount = Number(requirements[0]?.count ?? 0);
+
+        const passed =
+          characterFound &&
+          tokenCount === 3 &&
+          levelCount === 10 &&
+          requirementCount === 27;
+
+        if (!cancelled) {
+          if (passed) {
+            setResult({
+              status: "ok",
+              message:
+                `Mickey Mouse verified successfully.\n\n` +
+                `Character: Mickey Mouse\n` +
+                `Maximum Level: 10\n` +
+                `Tokens: ${tokenCount}\n` +
+                `Character Levels: ${levelCount}\n` +
+                `Token Requirements: ${requirementCount}`,
+            });
+          } else {
+            setResult({
+              status: "error",
+              message:
+                `Mickey data did not match expectations.\n\n` +
+                `Character Found: ${characterFound}\n` +
+                `Tokens: ${tokenCount} (expected 3)\n` +
+                `Character Levels: ${levelCount} (expected 10)\n` +
+                `Token Requirements: ${requirementCount} (expected 27)`,
+            });
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setResult({
+            status: "error",
+            message:
+              error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
 
-    verifyDatabases();
+    verifyMickeyData();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const allPassed =
-    gameDatabase.status === "ok" &&
-    playerDatabase.status === "ok";
-
   return (
     <main className="container">
-      <h1>DMK Database Verification</h1>
+      <h1>DMK Game Data Verification</h1>
 
-      <p>
-        Verifying the initial local game-data and player-progress databases.
-      </p>
+      <h2>
+        {result.status === "checking" && "Checking..."}
+        {result.status === "ok" && "✓ Passed"}
+        {result.status === "error" && "✗ Failed"}
+      </h2>
 
-      <DatabaseResult
-        title="Game Data"
-        fileName="dmk-data.db"
-        expectedTables={gameTables}
-        result={gameDatabase}
-      />
-
-      <DatabaseResult
-        title="Player Progress"
-        fileName="dmk-player.db"
-        expectedTables={playerTables}
-        result={playerDatabase}
-      />
-
-      {allPassed && (
-        <h2>✓ Database foundation verified successfully.</h2>
-      )}
+      <pre
+        style={{
+          whiteSpace: "pre-wrap",
+          textAlign: "left",
+          display: "inline-block",
+        }}
+      >
+        {result.message}
+      </pre>
     </main>
   );
 }

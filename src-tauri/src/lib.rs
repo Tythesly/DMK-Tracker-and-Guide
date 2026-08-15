@@ -7,12 +7,20 @@ fn greet(name: &str) -> String {
 }
 
 fn game_data_migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "create_game_schema_v0_1",
-        sql: include_str!("../migrations/001_game_initial.sql"),
-        kind: MigrationKind::Up,
-    }]
+    vec![
+        Migration {
+            version: 1,
+            description: "create_game_schema_v0_1",
+            sql: include_str!("../migrations/001_game_initial.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "seed_mickey_development_data",
+            sql: include_str!("../migrations/002_game_dev_seed_mickey.sql"),
+            kind: MigrationKind::Up,
+        },
+    ]
 }
 
 fn player_data_migrations() -> Vec<Migration> {
