@@ -20,6 +20,12 @@ fn game_data_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/002_game_dev_seed_mickey.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "correct_mickey_ears_display_name",
+            sql: include_str!("../migrations/003_game_correct_mickey_ears_name.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

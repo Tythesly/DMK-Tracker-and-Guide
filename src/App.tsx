@@ -2,142 +2,169 @@ import { useEffect, useState } from "react";
 import Database from "@tauri-apps/plugin-sql";
 import "./App.css";
 
-type VerificationResult = {
-  status: "checking" | "ok" | "error";
-  message: string;
-};
-
-type CountRow = {
-  count: number;
-};
-
-type CharacterRow = {
+type Character = {
+  id: string;
   display_name: string;
   max_level: number;
+  collection_name: string;
+};
+
+type Token = {
+  id: string;
+  display_name: string;
+  token_type: string;
+};
+
+type LevelRequirement = {
+  target_level: number;
+  token_id: string;
+  token_name: string;
+  quantity: number;
 };
 
 function App() {
-  const [result, setResult] = useState<VerificationResult>({
-    status: "checking",
-    message: "Checking Mickey Mouse development data...",
-  });
+  const [character, setCharacter] = useState<Character | null>(null);
+  const [tokens, setTokens] = useState<Token[]>([]);
+  const [requirements, setRequirements] = useState<LevelRequirement[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function verifyMickeyData() {
+    async function loadCharacterData() {
       try {
         const db = Database.get("sqlite:dmk-data.db");
 
-        const character = await db.select<CharacterRow[]>(
+        const characterRows = await db.select<Character[]>(
           `
-          SELECT display_name, max_level
+          SELECT
+            characters.id,
+            characters.display_name,
+            characters.max_level,
+            collections.display_name AS collection_name
           FROM characters
-          WHERE id = 'character_mickey_mouse'
+          INNER JOIN collections
+            ON collections.id = characters.collection_id
+          WHERE characters.id = $1
           `,
+          ["character_mickey_mouse"],
         );
 
-        const tokens = await db.select<CountRow[]>(
+        if (characterRows.length !== 1) {
+          throw new Error("Mickey Mouse could not be found in the game database.");
+        }
+
+        const tokenRows = await db.select<Token[]>(
           `
-          SELECT COUNT(*) AS count
+          SELECT
+            id,
+            display_name,
+            token_type
           FROM tokens
-          WHERE associated_character_id = 'character_mickey_mouse'
-             OR associated_collection_id = 'collection_mickey_friends'
+          WHERE associated_character_id = $1
+             OR associated_collection_id = $2
+          ORDER BY sort_order, display_name
           `,
+          [
+            "character_mickey_mouse",
+            "collection_mickey_friends",
+          ],
         );
 
-        const levels = await db.select<CountRow[]>(
+        const requirementRows = await db.select<LevelRequirement[]>(
           `
-          SELECT COUNT(*) AS count
-          FROM character_levels
-          WHERE character_id = 'character_mickey_mouse'
+          SELECT
+            requirements.target_level,
+            requirements.token_id,
+            tokens.display_name AS token_name,
+            requirements.quantity
+          FROM character_level_token_requirements AS requirements
+          INNER JOIN tokens
+            ON tokens.id = requirements.token_id
+          WHERE requirements.character_id = $1
+          ORDER BY requirements.target_level, tokens.sort_order
           `,
+          ["character_mickey_mouse"],
         );
 
-        const requirements = await db.select<CountRow[]>(
-          `
-          SELECT COUNT(*) AS count
-          FROM character_level_token_requirements
-          WHERE character_id = 'character_mickey_mouse'
-          `,
-        );
-
-        const characterFound =
-          character.length === 1 &&
-          character[0].display_name === "Mickey Mouse" &&
-          character[0].max_level === 10;
-
-        const tokenCount = Number(tokens[0]?.count ?? 0);
-        const levelCount = Number(levels[0]?.count ?? 0);
-        const requirementCount = Number(requirements[0]?.count ?? 0);
-
-        const passed =
-          characterFound &&
-          tokenCount === 3 &&
-          levelCount === 10 &&
-          requirementCount === 27;
-
-        if (!cancelled) {
-          if (passed) {
-            setResult({
-              status: "ok",
-              message:
-                `Mickey Mouse verified successfully.\n\n` +
-                `Character: Mickey Mouse\n` +
-                `Maximum Level: 10\n` +
-                `Tokens: ${tokenCount}\n` +
-                `Character Levels: ${levelCount}\n` +
-                `Token Requirements: ${requirementCount}`,
-            });
-          } else {
-            setResult({
-              status: "error",
-              message:
-                `Mickey data did not match expectations.\n\n` +
-                `Character Found: ${characterFound}\n` +
-                `Tokens: ${tokenCount} (expected 3)\n` +
-                `Character Levels: ${levelCount} (expected 10)\n` +
-                `Token Requirements: ${requirementCount} (expected 27)`,
-            });
-          }
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setResult({
-            status: "error",
-            message:
-              error instanceof Error ? error.message : String(error),
-          });
-        }
+        setCharacter(characterRows[0]);
+        setTokens(tokenRows);
+        setRequirements(requirementRows);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
       }
     }
 
-    verifyMickeyData();
-
-    return () => {
-      cancelled = true;
-    };
+    loadCharacterData();
   }, []);
+
+  if (error) {
+    return (
+      <main className="container">
+        <h1>DMK Complete Tracker & Guide</h1>
+        <h2>Unable to load character data</h2>
+        <p>{error}</p>
+      </main>
+    );
+  }
+
+  if (!character) {
+    return (
+      <main className="container">
+        <h1>DMK Complete Tracker & Guide</h1>
+        <p>Loading character data...</p>
+      </main>
+    );
+  }
 
   return (
     <main className="container">
-      <h1>DMK Game Data Verification</h1>
+      <h1>DMK Complete Tracker & Guide</h1>
 
-      <h2>
-        {result.status === "checking" && "Checking..."}
-        {result.status === "ok" && "✓ Passed"}
-        {result.status === "error" && "✗ Failed"}
-      </h2>
+      <section>
+        <h2>{character.display_name}</h2>
 
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          textAlign: "left",
-          display: "inline-block",
-        }}
-      >
-        {result.message}
-      </pre>
+        <p>
+          <strong>Collection:</strong> {character.collection_name}
+        </p>
+
+        <p>
+          <strong>Maximum Level:</strong> {character.max_level}
+        </p>
+
+        <h3>Tokens</h3>
+
+        <ul>
+          {tokens.map((token) => (
+            <li key={token.id}>
+              {token.display_name} ({token.token_type})
+            </li>
+          ))}
+        </ul>
+
+        <h3>Level Requirements</h3>
+
+        {Array.from(
+          { length: character.max_level - 1 },
+          (_, index) => index + 2,
+        ).map((level) => {
+          const levelRequirements = requirements.filter(
+            (requirement) => requirement.target_level === level,
+          );
+
+          return (
+            <div key={level}>
+              <h4>Level {level}</h4>
+
+              <ul>
+                {levelRequirements.map((requirement) => (
+                  <li key={requirement.token_id}>
+                    {requirement.token_name}: {requirement.quantity}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </section>
     </main>
   );
 }
