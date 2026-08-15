@@ -568,3 +568,56 @@ larger DMK systems are added.
 
 &#x20; auditing.
 
+---
+
+## Local File Storage
+
+The application must use Tauri's application data directory rather than
+hard-coded Windows user paths.
+
+The application's private local storage will contain:
+
+- `dmk-data.db` - installed DMK game data
+- `dmk-player.db` - the player's local progress
+- application settings
+- update-related working data where required
+
+The application must never store player progress inside the application
+installation directory.
+
+### Player Database
+
+`dmk-player.db` contains the player's personal progress and must survive:
+
+- DMK game-data updates
+- application updates
+- replacement of `dmk-data.db`
+
+It must never be overwritten by a game-data update.
+
+### Game Database
+
+`dmk-data.db` contains authoritative DMK game information.
+
+A verified DMK data update may replace or upgrade this database without
+changing `dmk-player.db`.
+
+### Backups
+
+Manual player backups will be created only when the player chooses Export.
+
+The player will be allowed to choose where the exported backup file is saved.
+
+Importing a backup must validate the backup before replacing or merging
+player progress.
+
+### Update Packages
+
+DMK game-data updates will use signed `.dmkupdate` packages.
+
+Users may:
+
+- optionally check online for available DMK data updates
+- manually select a downloaded `.dmkupdate` file while completely offline
+
+Game-data updates and application updates remain separate systems.
