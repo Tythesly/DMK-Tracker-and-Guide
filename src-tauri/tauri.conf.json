@@ -21,6 +21,14 @@
       "csp": null
     }
   },
+  "plugins": {
+    "sql": {
+      "preload": [
+        "sqlite:dmk-data.db",
+        "sqlite:dmk-player.db"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
