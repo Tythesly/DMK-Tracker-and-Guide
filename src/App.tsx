@@ -22,18 +22,39 @@ type LevelRequirement = {
   quantity: number;
 };
 
+type CharacterProgressRow = {
+  is_unlocked: number;
+  current_level: number;
+};
+
+type TokenInventoryRow = {
+  token_id: string;
+  quantity: number;
+};
+
+type TokenQuantities = Record<string, number>;
+
 function App() {
   const [character, setCharacter] = useState<Character | null>(null);
   const [tokens, setTokens] = useState<Token[]>([]);
   const [requirements, setRequirements] = useState<LevelRequirement[]>([]);
+
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [currentLevel, setCurrentLevel] = useState(0);
+  const [tokenQuantities, setTokenQuantities] = useState<TokenQuantities>({});
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadCharacterData() {
+    async function loadData() {
       try {
-        const db = Database.get("sqlite:dmk-data.db");
+        const gameDb = Database.get("sqlite:dmk-data.db");
+        const playerDb = Database.get("sqlite:dmk-player.db");
 
-        const characterRows = await db.select<Character[]>(
+        const characterRows = await gameDb.select<Character[]>(
           `
           SELECT
             characters.id,
@@ -49,10 +70,12 @@ function App() {
         );
 
         if (characterRows.length !== 1) {
-          throw new Error("Mickey Mouse could not be found in the game database.");
+          throw new Error(
+            "Mickey Mouse could not be found in the game database.",
+          );
         }
 
-        const tokenRows = await db.select<Token[]>(
+        const tokenRows = await gameDb.select<Token[]>(
           `
           SELECT
             id,
@@ -69,7 +92,7 @@ function App() {
           ],
         );
 
-        const requirementRows = await db.select<LevelRequirement[]>(
+        const requirementRows = await gameDb.select<LevelRequirement[]>(
           `
           SELECT
             requirements.target_level,
@@ -85,35 +108,209 @@ function App() {
           ["character_mickey_mouse"],
         );
 
+        const progressRows =
+          await playerDb.select<CharacterProgressRow[]>(
+            `
+            SELECT
+              is_unlocked,
+              current_level
+            FROM character_progress
+            WHERE character_id = $1
+            `,
+            ["character_mickey_mouse"],
+          );
+
+        const inventoryRows =
+          await playerDb.select<TokenInventoryRow[]>(
+            `
+            SELECT
+              token_id,
+              quantity
+            FROM token_inventory
+            WHERE token_id = $1
+               OR token_id = $2
+               OR token_id = $3
+            `,
+            [
+              "token_mickey_balloon",
+              "token_mickey_gloves",
+              "token_mickey_ears",
+            ],
+          );
+
+        const quantities: TokenQuantities = {};
+
+        for (const token of tokenRows) {
+          quantities[token.id] = 0;
+        }
+
+        for (const inventory of inventoryRows) {
+          quantities[inventory.token_id] = Number(inventory.quantity);
+        }
+
+        if (progressRows.length === 1) {
+          setIsUnlocked(progressRows[0].is_unlocked === 1);
+          setCurrentLevel(Number(progressRows[0].current_level));
+        } else {
+          setIsUnlocked(false);
+          setCurrentLevel(0);
+        }
+
+        setTokenQuantities(quantities);
         setCharacter(characterRows[0]);
         setTokens(tokenRows);
         setRequirements(requirementRows);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
       }
     }
 
-    loadCharacterData();
+    loadData();
   }, []);
 
-  if (error) {
+  function handleUnlockedChange(checked: boolean) {
+    setIsUnlocked(checked);
+    setSaveMessage(null);
+
+    if (!checked) {
+      setCurrentLevel(0);
+    } else if (currentLevel === 0) {
+      setCurrentLevel(1);
+    }
+  }
+
+  function handleLevelChange(level: number) {
+    setCurrentLevel(level);
+    setSaveMessage(null);
+
+    if (level > 0) {
+      setIsUnlocked(true);
+    } else {
+      setIsUnlocked(false);
+    }
+  }
+
+  function handleTokenChange(tokenId: string, value: string) {
+    const parsedValue = Number.parseInt(value, 10);
+
+    const safeValue =
+      Number.isNaN(parsedValue) || parsedValue < 0
+        ? 0
+        : parsedValue;
+
+    setTokenQuantities((current) => ({
+      ...current,
+      [tokenId]: safeValue,
+    }));
+
+    setSaveMessage(null);
+  }
+
+  async function saveProgress() {
+    if (!character) {
+      return;
+    }
+
+    setSaving(true);
+    setSaveMessage(null);
+    setError(null);
+
+    try {
+      const playerDb = Database.get("sqlite:dmk-player.db");
+      const updatedAt = new Date().toISOString();
+
+      await playerDb.execute(
+        `
+        INSERT INTO character_progress (
+          character_id,
+          is_unlocked,
+          current_level,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4)
+
+        ON CONFLICT(character_id) DO UPDATE SET
+          is_unlocked = excluded.is_unlocked,
+          current_level = excluded.current_level,
+          updated_at = excluded.updated_at
+        `,
+        [
+          character.id,
+          isUnlocked ? 1 : 0,
+          currentLevel,
+          updatedAt,
+        ],
+      );
+
+      for (const token of tokens) {
+        const quantity = tokenQuantities[token.id] ?? 0;
+
+        await playerDb.execute(
+          `
+          INSERT INTO token_inventory (
+            token_id,
+            quantity,
+            updated_at
+          )
+          VALUES ($1, $2, $3)
+
+          ON CONFLICT(token_id) DO UPDATE SET
+            quantity = excluded.quantity,
+            updated_at = excluded.updated_at
+          `,
+          [
+            token.id,
+            quantity,
+            updatedAt,
+          ],
+        );
+      }
+
+      setSaveMessage("Progress saved successfully.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : String(err),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
     return (
       <main className="container">
         <h1>DMK Complete Tracker & Guide</h1>
-        <h2>Unable to load character data</h2>
-        <p>{error}</p>
+        <p>Loading character and player data...</p>
       </main>
     );
   }
 
-  if (!character) {
+  if (error || !character) {
     return (
       <main className="container">
         <h1>DMK Complete Tracker & Guide</h1>
-        <p>Loading character data...</p>
+        <h2>Unable to load tracker data</h2>
+        <p>{error ?? "Character data was unavailable."}</p>
       </main>
     );
   }
+
+  const nextLevel =
+    currentLevel < character.max_level
+      ? currentLevel + 1
+      : null;
+
+  const nextLevelRequirements =
+    nextLevel === null
+      ? []
+      : requirements.filter(
+          (requirement) =>
+            requirement.target_level === nextLevel,
+        );
 
   return (
     <main className="container">
@@ -123,47 +320,132 @@ function App() {
         <h2>{character.display_name}</h2>
 
         <p>
-          <strong>Collection:</strong> {character.collection_name}
+          <strong>Collection:</strong>{" "}
+          {character.collection_name}
         </p>
 
         <p>
-          <strong>Maximum Level:</strong> {character.max_level}
+          <strong>Maximum Level:</strong>{" "}
+          {character.max_level}
         </p>
 
-        <h3>Tokens</h3>
+        <h3>Player Progress</h3>
 
-        <ul>
-          {tokens.map((token) => (
-            <li key={token.id}>
-              {token.display_name} ({token.token_type})
-            </li>
-          ))}
-        </ul>
+        <p>
+          <label>
+            <input
+              type="checkbox"
+              checked={isUnlocked}
+              onChange={(event) =>
+                handleUnlockedChange(event.currentTarget.checked)
+              }
+            />{" "}
+            Unlocked
+          </label>
+        </p>
 
-        <h3>Level Requirements</h3>
+        <p>
+          <label htmlFor="current-level">
+            <strong>Current Level:</strong>{" "}
+          </label>
 
-        {Array.from(
-          { length: character.max_level - 1 },
-          (_, index) => index + 2,
-        ).map((level) => {
-          const levelRequirements = requirements.filter(
-            (requirement) => requirement.target_level === level,
-          );
+          <select
+            id="current-level"
+            value={currentLevel}
+            onChange={(event) =>
+              handleLevelChange(
+                Number(event.currentTarget.value),
+              )
+            }
+          >
+            <option value={0}>Not Welcomed</option>
 
-          return (
-            <div key={level}>
-              <h4>Level {level}</h4>
+            {Array.from(
+              { length: character.max_level },
+              (_, index) => index + 1,
+            ).map((level) => (
+              <option key={level} value={level}>
+                Level {level}
+              </option>
+            ))}
+          </select>
+        </p>
 
+        <h3>Current Token Inventory</h3>
+
+        {tokens.map((token) => (
+          <p key={token.id}>
+            <label htmlFor={`token-${token.id}`}>
+              {token.display_name}:{" "}
+            </label>
+
+            <input
+              id={`token-${token.id}`}
+              type="number"
+              min="0"
+              step="1"
+              value={tokenQuantities[token.id] ?? 0}
+              onChange={(event) =>
+                handleTokenChange(
+                  token.id,
+                  event.currentTarget.value,
+                )
+              }
+            />
+          </p>
+        ))}
+
+        {currentLevel >= character.max_level ? (
+          <h3>✓ {character.display_name} is at maximum level.</h3>
+        ) : currentLevel === 0 ? (
+          <>
+            <h3>Welcome Status</h3>
+            <p>
+              {character.display_name} has not been welcomed yet.
+            </p>
+          </>
+        ) : (
+          <>
+            <h3>Requirements for Level {nextLevel}</h3>
+
+            {nextLevelRequirements.length === 0 ? (
+              <p>No token requirements are stored for this level.</p>
+            ) : (
               <ul>
-                {levelRequirements.map((requirement) => (
-                  <li key={requirement.token_id}>
-                    {requirement.token_name}: {requirement.quantity}
-                  </li>
-                ))}
+                {nextLevelRequirements.map((requirement) => {
+                  const owned =
+                    tokenQuantities[requirement.token_id] ?? 0;
+
+                  const remaining = Math.max(
+                    requirement.quantity - owned,
+                    0,
+                  );
+
+                  return (
+                    <li key={requirement.token_id}>
+                      {requirement.token_name}:{" "}
+                      {owned} / {requirement.quantity}
+                      {" — "}
+                      {remaining} remaining
+                    </li>
+                  );
+                })}
               </ul>
-            </div>
-          );
-        })}
+            )}
+          </>
+        )}
+
+        <p>
+          <button
+            type="button"
+            onClick={saveProgress}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save Progress"}
+          </button>
+        </p>
+
+        {saveMessage && <p>{saveMessage}</p>}
       </section>
     </main>
   );
