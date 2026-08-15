@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Database from "@tauri-apps/plugin-sql";
 import "./App.css";
 
@@ -34,6 +34,13 @@ type TokenInventoryRow = {
 
 type TokenQuantities = Record<string, number>;
 
+type SaveStatus =
+  | "idle"
+  | "pending"
+  | "saving"
+  | "saved"
+  | "error";
+
 function App() {
   const [character, setCharacter] = useState<Character | null>(null);
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -41,12 +48,15 @@ function App() {
 
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [currentLevel, setCurrentLevel] = useState(0);
-  const [tokenQuantities, setTokenQuantities] = useState<TokenQuantities>({});
+  const [tokenQuantities, setTokenQuantities] =
+    useState<TokenQuantities>({});
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] =
+    useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+
+  const editVersionRef = useRef(0);
 
   useEffect(() => {
     async function loadData() {
@@ -92,21 +102,22 @@ function App() {
           ],
         );
 
-        const requirementRows = await gameDb.select<LevelRequirement[]>(
-          `
-          SELECT
-            requirements.target_level,
-            requirements.token_id,
-            tokens.display_name AS token_name,
-            requirements.quantity
-          FROM character_level_token_requirements AS requirements
-          INNER JOIN tokens
-            ON tokens.id = requirements.token_id
-          WHERE requirements.character_id = $1
-          ORDER BY requirements.target_level, tokens.sort_order
-          `,
-          ["character_mickey_mouse"],
-        );
+        const requirementRows =
+          await gameDb.select<LevelRequirement[]>(
+            `
+            SELECT
+              requirements.target_level,
+              requirements.token_id,
+              tokens.display_name AS token_name,
+              requirements.quantity
+            FROM character_level_token_requirements AS requirements
+            INNER JOIN tokens
+              ON tokens.id = requirements.token_id
+            WHERE requirements.character_id = $1
+            ORDER BY requirements.target_level, tokens.sort_order
+            `,
+            ["character_mickey_mouse"],
+          );
 
         const progressRows =
           await playerDb.select<CharacterProgressRow[]>(
@@ -145,12 +156,15 @@ function App() {
         }
 
         for (const inventory of inventoryRows) {
-          quantities[inventory.token_id] = Number(inventory.quantity);
+          quantities[inventory.token_id] =
+            Number(inventory.quantity);
         }
 
         if (progressRows.length === 1) {
           setIsUnlocked(progressRows[0].is_unlocked === 1);
-          setCurrentLevel(Number(progressRows[0].current_level));
+          setCurrentLevel(
+            Number(progressRows[0].current_level),
+          );
         } else {
           setIsUnlocked(false);
           setCurrentLevel(0);
@@ -161,7 +175,9 @@ function App() {
         setTokens(tokenRows);
         setRequirements(requirementRows);
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(
+          err instanceof Error ? err.message : String(err),
+        );
       } finally {
         setLoading(false);
       }
@@ -170,29 +186,39 @@ function App() {
     loadData();
   }, []);
 
+  function markEdited() {
+    editVersionRef.current += 1;
+    setSaveStatus("pending");
+  }
+
   function handleUnlockedChange(checked: boolean) {
     setIsUnlocked(checked);
-    setSaveMessage(null);
 
     if (!checked) {
       setCurrentLevel(0);
     } else if (currentLevel === 0) {
       setCurrentLevel(1);
     }
+
+    markEdited();
   }
 
   function handleLevelChange(level: number) {
     setCurrentLevel(level);
-    setSaveMessage(null);
 
     if (level > 0) {
       setIsUnlocked(true);
     } else {
       setIsUnlocked(false);
     }
+
+    markEdited();
   }
 
-  function handleTokenChange(tokenId: string, value: string) {
+  function handleTokenChange(
+    tokenId: string,
+    value: string,
+  ) {
     const parsedValue = Number.parseInt(value, 10);
 
     const safeValue =
@@ -205,80 +231,113 @@ function App() {
       [tokenId]: safeValue,
     }));
 
-    setSaveMessage(null);
+    markEdited();
   }
 
-  async function saveProgress() {
-    if (!character) {
+  useEffect(() => {
+    if (
+      loading ||
+      !character ||
+      saveStatus !== "pending"
+    ) {
       return;
     }
 
-    setSaving(true);
-    setSaveMessage(null);
-    setError(null);
+    const versionToSave = editVersionRef.current;
 
-    try {
-      const playerDb = Database.get("sqlite:dmk-player.db");
-      const updatedAt = new Date().toISOString();
+    const timeout = window.setTimeout(async () => {
+      setSaveStatus("saving");
 
-      await playerDb.execute(
-        `
-        INSERT INTO character_progress (
-          character_id,
-          is_unlocked,
-          current_level,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4)
+      try {
+        const playerDb = Database.get(
+          "sqlite:dmk-player.db",
+        );
 
-        ON CONFLICT(character_id) DO UPDATE SET
-          is_unlocked = excluded.is_unlocked,
-          current_level = excluded.current_level,
-          updated_at = excluded.updated_at
-        `,
-        [
-          character.id,
-          isUnlocked ? 1 : 0,
-          currentLevel,
-          updatedAt,
-        ],
-      );
-
-      for (const token of tokens) {
-        const quantity = tokenQuantities[token.id] ?? 0;
+        const updatedAt = new Date().toISOString();
 
         await playerDb.execute(
           `
-          INSERT INTO token_inventory (
-            token_id,
-            quantity,
+          INSERT INTO character_progress (
+            character_id,
+            is_unlocked,
+            current_level,
             updated_at
           )
-          VALUES ($1, $2, $3)
+          VALUES ($1, $2, $3, $4)
 
-          ON CONFLICT(token_id) DO UPDATE SET
-            quantity = excluded.quantity,
+          ON CONFLICT(character_id) DO UPDATE SET
+            is_unlocked = excluded.is_unlocked,
+            current_level = excluded.current_level,
             updated_at = excluded.updated_at
           `,
           [
-            token.id,
-            quantity,
+            character.id,
+            isUnlocked ? 1 : 0,
+            currentLevel,
             updatedAt,
           ],
         );
-      }
 
-      setSaveMessage("Progress saved successfully.");
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : String(err),
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
+        for (const token of tokens) {
+          const quantity =
+            tokenQuantities[token.id] ?? 0;
+
+          await playerDb.execute(
+            `
+            INSERT INTO token_inventory (
+              token_id,
+              quantity,
+              updated_at
+            )
+            VALUES ($1, $2, $3)
+
+            ON CONFLICT(token_id) DO UPDATE SET
+              quantity = excluded.quantity,
+              updated_at = excluded.updated_at
+            `,
+            [
+              token.id,
+              quantity,
+              updatedAt,
+            ],
+          );
+        }
+
+        if (
+          editVersionRef.current === versionToSave
+        ) {
+          setSaveStatus("saved");
+        } else {
+          setSaveStatus("pending");
+        }
+      } catch (err) {
+        if (
+          editVersionRef.current === versionToSave
+        ) {
+          setSaveStatus("error");
+          setError(
+            err instanceof Error
+              ? err.message
+              : String(err),
+          );
+        } else {
+          setSaveStatus("pending");
+        }
+      }
+    }, 700);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [
+    character,
+    currentLevel,
+    isUnlocked,
+    loading,
+    saveStatus,
+    tokenQuantities,
+    tokens,
+  ]);
 
   if (loading) {
     return (
@@ -294,7 +353,9 @@ function App() {
       <main className="container">
         <h1>DMK Complete Tracker & Guide</h1>
         <h2>Unable to load tracker data</h2>
-        <p>{error ?? "Character data was unavailable."}</p>
+        <p>
+          {error ?? "Character data was unavailable."}
+        </p>
       </main>
     );
   }
@@ -337,7 +398,9 @@ function App() {
               type="checkbox"
               checked={isUnlocked}
               onChange={(event) =>
-                handleUnlockedChange(event.currentTarget.checked)
+                handleUnlockedChange(
+                  event.currentTarget.checked,
+                )
               }
             />{" "}
             Unlocked
@@ -384,7 +447,9 @@ function App() {
               type="number"
               min="0"
               step="1"
-              value={tokenQuantities[token.id] ?? 0}
+              value={
+                tokenQuantities[token.id] ?? 0
+              }
               onChange={(event) =>
                 handleTokenChange(
                   token.id,
@@ -396,56 +461,75 @@ function App() {
         ))}
 
         {currentLevel >= character.max_level ? (
-          <h3>✓ {character.display_name} is at maximum level.</h3>
+          <h3>
+            ✓ {character.display_name} is at maximum
+            level.
+          </h3>
         ) : currentLevel === 0 ? (
           <>
             <h3>Welcome Status</h3>
             <p>
-              {character.display_name} has not been welcomed yet.
+              {character.display_name} has not been
+              welcomed yet.
             </p>
           </>
         ) : (
           <>
-            <h3>Requirements for Level {nextLevel}</h3>
+            <h3>
+              Requirements for Level {nextLevel}
+            </h3>
 
             {nextLevelRequirements.length === 0 ? (
-              <p>No token requirements are stored for this level.</p>
+              <p>
+                No token requirements are stored for
+                this level.
+              </p>
             ) : (
               <ul>
-                {nextLevelRequirements.map((requirement) => {
-                  const owned =
-                    tokenQuantities[requirement.token_id] ?? 0;
+                {nextLevelRequirements.map(
+                  (requirement) => {
+                    const owned =
+                      tokenQuantities[
+                        requirement.token_id
+                      ] ?? 0;
 
-                  const remaining = Math.max(
-                    requirement.quantity - owned,
-                    0,
-                  );
+                    const remaining = Math.max(
+                      requirement.quantity - owned,
+                      0,
+                    );
 
-                  return (
-                    <li key={requirement.token_id}>
-                      {requirement.token_name}:{" "}
-                      {owned} / {requirement.quantity}
-                      {" — "}
-                      {remaining} remaining
-                    </li>
-                  );
-                })}
+                    return (
+                      <li key={requirement.token_id}>
+                        {requirement.token_name}:{" "}
+                        {owned} /{" "}
+                        {requirement.quantity}
+                        {" — "}
+                        {remaining} remaining
+                      </li>
+                    );
+                  },
+                )}
               </ul>
             )}
           </>
         )}
 
         <p>
-          <button
-            type="button"
-            onClick={saveProgress}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save Progress"}
-          </button>
-        </p>
+          {saveStatus === "idle" &&
+            "Progress is stored locally."}
 
-        {saveMessage && <p>{saveMessage}</p>}
+          {saveStatus === "pending" &&
+            "Waiting to save..."}
+
+          {saveStatus === "saving" &&
+            "Saving..."}
+
+          {saveStatus === "saved" &&
+            "✓ Saved"}
+
+          {saveStatus === "error" &&
+            "Unable to save progress."}
+        </p>
       </section>
     </main>
   );
