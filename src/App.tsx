@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Database from "@tauri-apps/plugin-sql";
 
+import { loadCharacterGameData } from "./data/gameData";
+
 import type {
   Character,
   CharacterProgressRow,
@@ -12,6 +14,8 @@ import type {
 } from "./types/dmk";
 
 import "./App.css";
+
+const TEST_CHARACTER_ID = "character_mickey_mouse";
 
 function App() {
   const [character, setCharacter] = useState<Character | null>(null);
@@ -33,63 +37,13 @@ function App() {
   useEffect(() => {
     async function loadData() {
       try {
-        const gameDb = Database.get("sqlite:dmk-data.db");
         const playerDb = Database.get("sqlite:dmk-player.db");
 
-        const characterRows = await gameDb.select<Character[]>(
-          `
-          SELECT
-            characters.id,
-            characters.display_name,
-            characters.max_level,
-            collections.display_name AS collection_name
-          FROM characters
-          INNER JOIN collections
-            ON collections.id = characters.collection_id
-          WHERE characters.id = $1
-          `,
-          ["character_mickey_mouse"],
-        );
-
-        if (characterRows.length !== 1) {
-          throw new Error(
-            "Mickey Mouse could not be found in the game database.",
-          );
-        }
-
-        const tokenRows = await gameDb.select<Token[]>(
-          `
-          SELECT
-            id,
-            display_name,
-            token_type
-          FROM tokens
-          WHERE associated_character_id = $1
-             OR associated_collection_id = $2
-          ORDER BY sort_order, display_name
-          `,
-          [
-            "character_mickey_mouse",
-            "collection_mickey_friends",
-          ],
-        );
-
-        const requirementRows =
-          await gameDb.select<LevelRequirement[]>(
-            `
-            SELECT
-              requirements.target_level,
-              requirements.token_id,
-              tokens.display_name AS token_name,
-              requirements.quantity
-            FROM character_level_token_requirements AS requirements
-            INNER JOIN tokens
-              ON tokens.id = requirements.token_id
-            WHERE requirements.character_id = $1
-            ORDER BY requirements.target_level, tokens.sort_order
-            `,
-            ["character_mickey_mouse"],
-          );
+        const {
+          character: loadedCharacter,
+          tokens: loadedTokens,
+          requirements: loadedRequirements,
+        } = await loadCharacterGameData(TEST_CHARACTER_ID);
 
         const progressRows =
           await playerDb.select<CharacterProgressRow[]>(
@@ -100,7 +54,7 @@ function App() {
             FROM character_progress
             WHERE character_id = $1
             `,
-            ["character_mickey_mouse"],
+            [TEST_CHARACTER_ID],
           );
 
         const inventoryRows =
@@ -110,30 +64,27 @@ function App() {
               token_id,
               quantity
             FROM token_inventory
-            WHERE token_id = $1
-               OR token_id = $2
-               OR token_id = $3
             `,
-            [
-              "token_mickey_balloon",
-              "token_mickey_gloves",
-              "token_mickey_ears",
-            ],
           );
 
         const quantities: TokenQuantities = {};
 
-        for (const token of tokenRows) {
+        for (const token of loadedTokens) {
           quantities[token.id] = 0;
         }
 
         for (const inventory of inventoryRows) {
-          quantities[inventory.token_id] =
-            Number(inventory.quantity);
+          if (inventory.token_id in quantities) {
+            quantities[inventory.token_id] =
+              Number(inventory.quantity);
+          }
         }
 
         if (progressRows.length === 1) {
-          setIsUnlocked(progressRows[0].is_unlocked === 1);
+          setIsUnlocked(
+            progressRows[0].is_unlocked === 1,
+          );
+
           setCurrentLevel(
             Number(progressRows[0].current_level),
           );
@@ -142,13 +93,15 @@ function App() {
           setCurrentLevel(0);
         }
 
+        setCharacter(loadedCharacter);
+        setTokens(loadedTokens);
+        setRequirements(loadedRequirements);
         setTokenQuantities(quantities);
-        setCharacter(characterRows[0]);
-        setTokens(tokenRows);
-        setRequirements(requirementRows);
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : String(err),
+          err instanceof Error
+            ? err.message
+            : String(err),
         );
       } finally {
         setLoading(false);
@@ -287,6 +240,7 @@ function App() {
           editVersionRef.current === versionToSave
         ) {
           setSaveStatus("error");
+
           setError(
             err instanceof Error
               ? err.message
@@ -324,7 +278,9 @@ function App() {
     return (
       <main className="container">
         <h1>DMK Complete Tracker & Guide</h1>
+
         <h2>Unable to load tracker data</h2>
+
         <p>
           {error ?? "Character data was unavailable."}
         </p>
@@ -399,7 +355,10 @@ function App() {
               { length: character.max_level },
               (_, index) => index + 1,
             ).map((level) => (
-              <option key={level} value={level}>
+              <option
+                key={level}
+                value={level}
+              >
                 Level {level}
               </option>
             ))}
@@ -440,6 +399,7 @@ function App() {
         ) : currentLevel === 0 ? (
           <>
             <h3>Welcome Status</h3>
+
             <p>
               {character.display_name} has not been
               welcomed yet.
