@@ -12,6 +12,7 @@ import {
 
 import type {
   Character,
+  CharacterLevel,
   LevelRequirement,
   SaveStatus,
   Token,
@@ -19,6 +20,64 @@ import type {
 } from "./types/dmk";
 
 import "./App.css";
+
+function formatDuration(seconds: number | null) {
+  if (seconds === null) {
+    return "Not stored";
+  }
+
+  if (seconds === 0) {
+    return "Instant";
+  }
+
+  const days = Math.floor(seconds / 86400);
+
+  const hours = Math.floor(
+    (seconds % 86400) / 3600,
+  );
+
+  const minutes = Math.floor(
+    (seconds % 3600) / 60,
+  );
+
+  const parts: string[] = [];
+
+  if (days > 0) {
+    parts.push(
+      `${days} ${days === 1 ? "day" : "days"}`,
+    );
+  }
+
+  if (hours > 0) {
+    parts.push(
+      `${hours} ${
+        hours === 1 ? "hour" : "hours"
+      }`,
+    );
+  }
+
+  if (minutes > 0) {
+    parts.push(
+      `${minutes} ${
+        minutes === 1
+          ? "minute"
+          : "minutes"
+      }`,
+    );
+  }
+
+  return parts.length > 0
+    ? parts.join(" ")
+    : `${seconds} seconds`;
+}
+
+function formatNumber(value: number | null) {
+  if (value === null) {
+    return "Not stored";
+  }
+
+  return value.toLocaleString();
+}
 
 function App() {
   const [characters, setCharacters] =
@@ -37,6 +96,9 @@ function App() {
 
   const [requirements, setRequirements] =
     useState<LevelRequirement[]>([]);
+
+  const [levels, setLevels] =
+    useState<CharacterLevel[]>([]);
 
   const [isUnlocked, setIsUnlocked] =
     useState(false);
@@ -131,6 +193,7 @@ function App() {
       setCharacter(null);
       setTokens([]);
       setRequirements([]);
+      setLevels([]);
       setTokenQuantities({});
 
       try {
@@ -138,6 +201,7 @@ function App() {
           character: loadedCharacter,
           tokens: loadedTokens,
           requirements: loadedRequirements,
+          levels: loadedLevels,
         } = await loadCharacterGameData(
           selectedCharacterId,
         );
@@ -155,6 +219,7 @@ function App() {
         setCharacter(loadedCharacter);
         setTokens(loadedTokens);
         setRequirements(loadedRequirements);
+        setLevels(loadedLevels);
 
         setIsUnlocked(
           playerProgress.isUnlocked,
@@ -366,6 +431,17 @@ function App() {
             nextLevel,
         );
 
+  const welcomeRequirements =
+    requirements.filter(
+      (requirement) =>
+        requirement.target_level === 1,
+    );
+
+  const welcomeLevel =
+    levels.find(
+      (level) => level.target_level === 1,
+    ) ?? null;
+
   const characterSelectionDisabled =
     loadingCharacter ||
     saveStatus === "pending" ||
@@ -526,13 +602,72 @@ function App() {
             ✓ {character.display_name} is
             at maximum level.
           </h3>
-        ) : currentLevel === 0 ? (
+        ) : currentLevel === 0 &&
+          !isUnlocked ? (
           <>
-            <h3>Welcome Status</h3>
+            <h3>Welcome Requirements</h3>
+
+            {welcomeRequirements.length ===
+            0 ? (
+              <p>
+                No token requirements are
+                stored for welcoming this
+                character.
+              </p>
+            ) : (
+              <ul>
+                {welcomeRequirements.map(
+                  (requirement) => {
+                    const owned =
+                      tokenQuantities[
+                        requirement.token_id
+                      ] ?? 0;
+
+                    const remaining =
+                      Math.max(
+                        requirement.quantity -
+                          owned,
+                        0,
+                      );
+
+                    return (
+                      <li
+                        key={
+                          requirement.token_id
+                        }
+                      >
+                        {
+                          requirement.token_name
+                        }
+                        : {owned} /{" "}
+                        {
+                          requirement.quantity
+                        }
+                        {" — "}
+                        {remaining} remaining
+                      </li>
+                    );
+                  },
+                )}
+              </ul>
+            )}
 
             <p>
-              {character.display_name} has
-              not been welcomed yet.
+              <strong>Magic:</strong>{" "}
+              {formatNumber(
+                welcomeLevel?.magic_cost ??
+                  null,
+              )}
+            </p>
+
+            <p>
+              <strong>
+                Welcome Time:
+              </strong>{" "}
+              {formatDuration(
+                welcomeLevel?.level_time_seconds ??
+                  null,
+              )}
             </p>
           </>
         ) : (

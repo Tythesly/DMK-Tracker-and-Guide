@@ -2,6 +2,7 @@ import Database from "@tauri-apps/plugin-sql";
 
 import type {
   Character,
+  CharacterLevel,
   LevelRequirement,
   Token,
 } from "../types/dmk";
@@ -114,6 +115,25 @@ export async function getCharacterLevelRequirements(
   );
 }
 
+export async function getCharacterLevels(
+  characterId: string,
+): Promise<CharacterLevel[]> {
+  const db = getGameDatabase();
+
+  return db.select<CharacterLevel[]>(
+    `
+    SELECT
+      target_level,
+      magic_cost,
+      level_time_seconds
+    FROM character_levels
+    WHERE character_id = $1
+    ORDER BY target_level
+    `,
+    [characterId],
+  );
+}
+
 export async function loadCharacterGameData(
   characterId: string,
 ) {
@@ -121,15 +141,18 @@ export async function loadCharacterGameData(
     character,
     tokens,
     requirements,
+    levels,
   ] = await Promise.all([
     getCharacterById(characterId),
     getCharacterTokens(characterId),
     getCharacterLevelRequirements(characterId),
+    getCharacterLevels(characterId),
   ]);
 
   return {
     character,
     tokens,
     requirements,
+    levels,
   };
 }

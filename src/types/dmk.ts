@@ -18,6 +18,12 @@ export type LevelRequirement = {
   quantity: number;
 };
 
+export type CharacterLevel = {
+  target_level: number;
+  magic_cost: number | null;
+  level_time_seconds: number | null;
+};
+
 export type CharacterProgressRow = {
   is_unlocked: number;
   current_level: number;
