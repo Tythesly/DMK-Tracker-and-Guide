@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useState,
 } from "react";
@@ -9,6 +10,7 @@ import AppShell, {
 
 import CharacterDetailPage from "./pages/CharacterDetailPage";
 import CharactersOverviewPage from "./pages/CharactersOverviewPage";
+import SummaryGuidePage from "./pages/SummaryGuidePage";
 
 import type {
   SaveStatus,
@@ -25,23 +27,31 @@ type AppPage =
       characterId: string;
     };
 
+type NavigationMode =
+  | "push"
+  | "back";
+
+type PendingNavigation = {
+  destination: AppPage;
+  mode: NavigationMode;
+};
+
 type PlaceholderDefinition = {
   title: string;
   subtitle: string;
 };
 
-const placeholderPages: Record<
+type PlaceholderPageName =
   Exclude<
     ShellPage,
-    "characters"
-  >,
+    | "summary"
+    | "characters"
+  >;
+
+const placeholderPages: Record<
+  PlaceholderPageName,
   PlaceholderDefinition
 > = {
-  summary: {
-    title: "Summary & Guide",
-    subtitle:
-      "Overview, totals, and planning tools",
-  },
   attractions: {
     title: "Attractions",
     subtitle:
@@ -74,13 +84,36 @@ const placeholderPages: Record<
   },
 };
 
+function isSamePage(
+  firstPage: AppPage,
+  secondPage: AppPage,
+) {
+  if (
+    firstPage.name !==
+    secondPage.name
+  ) {
+    return false;
+  }
+
+  if (
+    firstPage.name ===
+      "character" &&
+    secondPage.name ===
+      "character"
+  ) {
+    return (
+      firstPage.characterId ===
+      secondPage.characterId
+    );
+  }
+
+  return true;
+}
+
 function PlaceholderPage({
   page,
 }: {
-  page: Exclude<
-    ShellPage,
-    "characters"
-  >;
+  page: PlaceholderPageName;
 }) {
   const definition =
     placeholderPages[page];
@@ -123,12 +156,17 @@ function App() {
     page,
     setPage,
   ] = useState<AppPage>({
-    name: "characters",
+    name: "summary",
   });
 
   const [
-    characterSaveStatus,
-    setCharacterSaveStatus,
+    pageHistory,
+    setPageHistory,
+  ] = useState<AppPage[]>([]);
+
+  const [
+    pageSaveStatus,
+    setPageSaveStatus,
   ] =
     useState<SaveStatus>(
       "idle",
@@ -138,7 +176,7 @@ function App() {
     pendingNavigation,
     setPendingNavigation,
   ] =
-    useState<ShellPage | null>(
+    useState<PendingNavigation | null>(
       null,
     );
 
@@ -147,82 +185,189 @@ function App() {
       ? "characters"
       : page.name;
 
-  function navigateImmediately(
-    destination: ShellPage,
-  ) {
-    setPendingNavigation(null);
+  const performNavigation =
+    useCallback(
+      (
+        destination: AppPage,
+        mode: NavigationMode,
+      ) => {
+        setPendingNavigation(
+          null,
+        );
 
-    setCharacterSaveStatus(
-      "idle",
+        setPageSaveStatus(
+          "idle",
+        );
+
+        if (
+          mode === "push"
+        ) {
+          if (
+            isSamePage(
+              page,
+              destination,
+            )
+          ) {
+            return;
+          }
+
+          setPageHistory(
+            (currentHistory) => [
+              ...currentHistory,
+              page,
+            ],
+          );
+        } else {
+          setPageHistory(
+            (currentHistory) => {
+              if (
+                currentHistory.length ===
+                0
+              ) {
+                return currentHistory;
+              }
+
+              return currentHistory.slice(
+                0,
+                -1,
+              );
+            },
+          );
+        }
+
+        setPage(
+          destination,
+        );
+      },
+      [page],
     );
 
-    setPage({
-      name: destination,
-    });
-  }
+  const requestNavigation =
+    useCallback(
+      (
+        destination: AppPage,
+        mode: NavigationMode,
+      ) => {
+        if (
+          isSamePage(
+            page,
+            destination,
+          )
+        ) {
+          return;
+        }
 
-  function handleNavigate(
-    destination: ShellPage,
-  ) {
-    if (
-      page.name === "character" &&
-      (characterSaveStatus ===
-        "pending" ||
-        characterSaveStatus ===
-          "saving")
-    ) {
-      setPendingNavigation(
+        if (
+          pageSaveStatus ===
+            "pending" ||
+          pageSaveStatus ===
+            "saving"
+        ) {
+          setPendingNavigation({
+            destination,
+            mode,
+          });
+
+          return;
+        }
+
+        if (
+          pageSaveStatus ===
+          "error"
+        ) {
+          return;
+        }
+
+        performNavigation(
+          destination,
+          mode,
+        );
+      },
+      [
+        page,
+        pageSaveStatus,
+        performNavigation,
+      ],
+    );
+
+  const handleNavigate =
+    useCallback(
+      (
+        destination: ShellPage,
+      ) => {
+        requestNavigation(
+          {
+            name: destination,
+          },
+          "push",
+        );
+      },
+      [requestNavigation],
+    );
+
+  const handleOpenCharacter =
+    useCallback(
+      (
+        characterId: string,
+      ) => {
+        requestNavigation(
+          {
+            name: "character",
+            characterId,
+          },
+          "push",
+        );
+      },
+      [requestNavigation],
+    );
+
+  const handleBack =
+    useCallback(() => {
+      if (
+        pageHistory.length ===
+        0
+      ) {
+        return;
+      }
+
+      const destination =
+        pageHistory[
+          pageHistory.length - 1
+        ];
+
+      requestNavigation(
         destination,
+        "back",
       );
-
-      return;
-    }
-
-    if (
-      page.name === "character" &&
-      characterSaveStatus ===
-        "error"
-    ) {
-      return;
-    }
-
-    navigateImmediately(
-      destination,
-    );
-  }
+    }, [
+      pageHistory,
+      requestNavigation,
+    ]);
 
   useEffect(() => {
     if (
-      page.name !== "character" ||
-      pendingNavigation === null
+      pendingNavigation ===
+      null
     ) {
       return;
     }
 
     if (
-      characterSaveStatus ===
+      pageSaveStatus ===
         "saved" ||
-      characterSaveStatus ===
+      pageSaveStatus ===
         "idle"
     ) {
-      const destination =
-        pendingNavigation;
-
-      setPendingNavigation(null);
-
-      setCharacterSaveStatus(
-        "idle",
+      performNavigation(
+        pendingNavigation.destination,
+        pendingNavigation.mode,
       );
-
-      setPage({
-        name: destination,
-      });
 
       return;
     }
 
     if (
-      characterSaveStatus ===
+      pageSaveStatus ===
       "error"
     ) {
       setPendingNavigation(
@@ -230,10 +375,58 @@ function App() {
       );
     }
   }, [
-    characterSaveStatus,
-    page.name,
+    pageSaveStatus,
     pendingNavigation,
+    performNavigation,
   ]);
+
+  useEffect(() => {
+    function handleMouseDown(
+      event: MouseEvent,
+    ) {
+      if (
+        event.button !== 3
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      handleBack();
+    }
+
+    function preventBackAuxClick(
+      event: MouseEvent,
+    ) {
+      if (
+        event.button === 3
+      ) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener(
+      "mousedown",
+      handleMouseDown,
+    );
+
+    window.addEventListener(
+      "auxclick",
+      preventBackAuxClick,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "mousedown",
+        handleMouseDown,
+      );
+
+      window.removeEventListener(
+        "auxclick",
+        preventBackAuxClick,
+      );
+    };
+  }, [handleBack]);
 
   let content;
 
@@ -245,13 +438,11 @@ function App() {
         initialCharacterId={
           page.characterId
         }
-        onBack={() =>
-          handleNavigate(
-            "characters",
-          )
+        onBack={
+          handleBack
         }
         onSaveStatusChange={
-          setCharacterSaveStatus
+          setPageSaveStatus
         }
       />
     );
@@ -260,13 +451,18 @@ function App() {
   ) {
     content = (
       <CharactersOverviewPage
-        onOpenCharacter={(
-          characterId,
-        ) =>
-          setPage({
-            name: "character",
-            characterId,
-          })
+        onOpenCharacter={
+          handleOpenCharacter
+        }
+      />
+    );
+  } else if (
+    page.name === "summary"
+  ) {
+    content = (
+      <SummaryGuidePage
+        onSaveStatusChange={
+          setPageSaveStatus
         }
       />
     );
