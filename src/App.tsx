@@ -431,6 +431,14 @@ function App() {
             nextLevel,
         );
 
+  const nextLevelData =
+    nextLevel === null
+      ? null
+      : levels.find(
+          (level) =>
+            level.target_level === nextLevel,
+        ) ?? null;
+
   const welcomeRequirements =
     requirements.filter(
       (requirement) =>
@@ -501,11 +509,6 @@ function App() {
         <p>
           <strong>Collection:</strong>{" "}
           {character.collection_name}
-        </p>
-
-        <p>
-          <strong>Maximum Level:</strong>{" "}
-          {character.max_level}
         </p>
 
         <h3>Player Progress</h3>
@@ -720,6 +723,24 @@ function App() {
                 )}
               </ul>
             )}
+
+            <p>
+              <strong>Magic:</strong>{" "}
+              {formatNumber(
+                nextLevelData?.magic_cost ??
+                  null,
+              )}
+            </p>
+
+            <p>
+              <strong>
+                Level-Up Time:
+              </strong>{" "}
+              {formatDuration(
+                nextLevelData?.level_time_seconds ??
+                  null,
+              )}
+            </p>
           </>
         )}
 
