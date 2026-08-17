@@ -37,3 +37,50 @@ export type CharacterInput = {
   isActive: boolean;
   notes: string;
 };
+
+export type TokenRarity =
+  | "common"
+  | "uncommon"
+  | "rare"
+  | "epic"
+  | "legendary"
+  | "unknown";
+
+export type TokenRecord = {
+  id: string;
+  displayName: string;
+  tokenType: string;
+  rarity: TokenRarity | null;
+
+  associatedCharacterId:
+    string | null;
+
+  associatedCharacterName:
+    string | null;
+
+  associatedCollectionId:
+    string | null;
+
+  associatedCollectionName:
+    string | null;
+
+  sortOrder: number;
+  isActive: boolean;
+  notes: string;
+};
+
+export type TokenInput = {
+  displayName: string;
+  tokenType: string;
+  rarity: TokenRarity | null;
+
+  associatedCharacterId:
+    string | null;
+
+  associatedCollectionId:
+    string | null;
+
+  sortOrder: number;
+  isActive: boolean;
+  notes: string;
+};

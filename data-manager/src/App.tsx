@@ -3,14 +3,16 @@ import {
   useState,
 } from "react";
 
-import CollectionsEditorPage from "./pages/CollectionsEditorPage";
 import CharactersEditorPage from "./pages/CharactersEditorPage";
+import CollectionsEditorPage from "./pages/CollectionsEditorPage";
+import TokensEditorPage from "./pages/TokensEditorPage";
 
 import "./App.css";
 
 type ManagerPage =
   | "collections"
-  | "characters";
+  | "characters"
+  | "tokens";
 
 function App() {
   const [
@@ -124,13 +126,19 @@ function App() {
 
           <button
             type="button"
-            className="manager-nav-button"
-            disabled
+            className={
+              activePage ===
+              "tokens"
+                ? "manager-nav-button manager-nav-button-active"
+                : "manager-nav-button"
+            }
+            onClick={() =>
+              navigate(
+                "tokens",
+              )
+            }
           >
-            Tokens
-            <span>
-              Soon
-            </span>
+            Tokens & Rarity
           </button>
 
           <button
@@ -156,6 +164,17 @@ function App() {
             disabled
           >
             Validation
+            <span>
+              Soon
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="manager-nav-button"
+            disabled
+          >
+            Master Import
             <span>
               Soon
             </span>
@@ -208,8 +227,15 @@ function App() {
               handleDirtyChange
             }
           />
-        ) : (
+        ) : activePage ===
+          "characters" ? (
           <CharactersEditorPage
+            onDirtyChange={
+              handleDirtyChange
+            }
+          />
+        ) : (
+          <TokensEditorPage
             onDirtyChange={
               handleDirtyChange
             }
