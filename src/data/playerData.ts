@@ -4,10 +4,13 @@ import type {
   Token,
   TokenQuantities,
   CharacterProgressRow,
+  PlayerResourceRow,
   TokenInventoryRow,
 } from "../types/dmk";
 
 const PLAYER_DATABASE = "sqlite:dmk-player.db";
+
+const MAGIC_RESOURCE_ID = "magic";
 
 function getPlayerDatabase() {
   return Database.get(PLAYER_DATABASE);
@@ -87,6 +90,27 @@ export async function loadCharacterPlayerProgress(
   };
 }
 
+export async function loadPlayerMagic(): Promise<number> {
+  const db = getPlayerDatabase();
+
+  const rows = await db.select<PlayerResourceRow[]>(
+    `
+    SELECT
+      resource_id,
+      quantity
+    FROM player_resources
+    WHERE resource_id = $1
+    `,
+    [MAGIC_RESOURCE_ID],
+  );
+
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  return Number(rows[0].quantity);
+}
+
 export async function saveCharacterPlayerProgress(
   characterId: string,
   isUnlocked: boolean,
@@ -144,4 +168,36 @@ export async function saveCharacterPlayerProgress(
       ],
     );
   }
+}
+
+export async function savePlayerMagic(
+  quantity: number,
+): Promise<void> {
+  const db = getPlayerDatabase();
+  const updatedAt = new Date().toISOString();
+
+  const safeQuantity =
+    Number.isFinite(quantity) && quantity >= 0
+      ? Math.floor(quantity)
+      : 0;
+
+  await db.execute(
+    `
+    INSERT INTO player_resources (
+      resource_id,
+      quantity,
+      updated_at
+    )
+    VALUES ($1, $2, $3)
+
+    ON CONFLICT(resource_id) DO UPDATE SET
+      quantity = excluded.quantity,
+      updated_at = excluded.updated_at
+    `,
+    [
+      MAGIC_RESOURCE_ID,
+      safeQuantity,
+      updatedAt,
+    ],
+  );
 }

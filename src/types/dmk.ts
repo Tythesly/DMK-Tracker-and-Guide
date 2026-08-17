@@ -34,6 +34,11 @@ export type TokenInventoryRow = {
   quantity: number;
 };
 
+export type PlayerResourceRow = {
+  resource_id: string;
+  quantity: number;
+};
+
 export type TokenQuantities = Record<string, number>;
 
 export type SaveStatus =

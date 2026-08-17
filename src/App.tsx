@@ -7,7 +7,9 @@ import {
 
 import {
   loadCharacterPlayerProgress,
+  loadPlayerMagic,
   saveCharacterPlayerProgress,
+  savePlayerMagic,
 } from "./data/playerData";
 
 import type {
@@ -109,6 +111,9 @@ function App() {
   const [tokenQuantities, setTokenQuantities] =
     useState<TokenQuantities>({});
 
+  const [magicQuantity, setMagicQuantity] =
+    useState(0);
+
   const [
     loadingCharacters,
     setLoadingCharacters,
@@ -206,11 +211,16 @@ function App() {
           selectedCharacterId,
         );
 
-        const playerProgress =
-          await loadCharacterPlayerProgress(
+        const [
+          playerProgress,
+          loadedMagicQuantity,
+        ] = await Promise.all([
+          loadCharacterPlayerProgress(
             selectedCharacterId,
             loadedTokens,
-          );
+          ),
+          loadPlayerMagic(),
+        ]);
 
         if (cancelled) {
           return;
@@ -231,6 +241,10 @@ function App() {
 
         setTokenQuantities(
           playerProgress.tokenQuantities,
+        );
+
+        setMagicQuantity(
+          loadedMagicQuantity,
         );
       } catch (err) {
         if (!cancelled) {
@@ -307,6 +321,24 @@ function App() {
     markEdited();
   }
 
+  function handleMagicChange(value: string) {
+  const unformattedValue =
+    value.replace(/,/g, "").trim();
+
+  const parsedValue =
+    Number.parseInt(unformattedValue, 10);
+
+  const safeValue =
+    Number.isNaN(parsedValue) ||
+    parsedValue < 0
+      ? 0
+      : parsedValue;
+
+  setMagicQuantity(safeValue);
+
+  markEdited();
+}
+
   useEffect(() => {
     if (
       loadingCharacter ||
@@ -331,6 +363,10 @@ function App() {
             currentLevel,
             tokens,
             tokenQuantities,
+          );
+
+          await savePlayerMagic(
+            magicQuantity,
           );
 
           if (
@@ -367,6 +403,7 @@ function App() {
     currentLevel,
     isUnlocked,
     loadingCharacter,
+    magicQuantity,
     saveStatus,
     tokenQuantities,
     tokens,
@@ -565,6 +602,28 @@ function App() {
               </option>
             ))}
           </select>
+        </p>
+
+        <h3>Player Resources</h3>
+
+        <p>
+          <label htmlFor="player-magic">
+            Magic:{" "}
+          </label>
+
+          <input
+           id="player-magic"
+          type="text"
+          inputMode="numeric"
+          value={magicQuantity.toLocaleString(
+            "en-US",
+          )}
+          onChange={(event) =>
+            handleMagicChange(
+              event.currentTarget.value,
+            )
+          }
+        />
         </p>
 
         <h3>

@@ -36,12 +36,20 @@ fn game_data_migrations() -> Vec<Migration> {
 }
 
 fn player_data_migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "create_player_schema_v0_1",
-        sql: include_str!("../migrations/001_player_initial.sql"),
-        kind: MigrationKind::Up,
-    }]
+    vec![
+        Migration {
+            version: 1,
+            description: "create_player_schema_v0_1",
+            sql: include_str!("../migrations/001_player_initial.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "add_player_resources",
+            sql: include_str!("../migrations/002_player_add_resources.sql"),
+            kind: MigrationKind::Up,
+        },
+    ]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
