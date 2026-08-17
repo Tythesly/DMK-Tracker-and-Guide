@@ -1,3 +1,5 @@
+mod editor_commands;
+
 use tauri_plugin_sql::{
     Migration,
     MigrationKind,
@@ -16,9 +18,18 @@ fn editor_migrations() -> Vec<Migration> {
     ]
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg_attr(
+    mobile,
+    tauri::mobile_entry_point
+)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(
+            tauri::generate_handler![
+                editor_commands::create_character_with_sort,
+                editor_commands::update_character_with_sort,
+            ],
+        )
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(
@@ -30,7 +41,9 @@ pub fn run() {
         .plugin(
             tauri_plugin_opener::init(),
         )
-        .run(tauri::generate_context!())
+        .run(
+            tauri::generate_context!(),
+        )
         .expect(
             "error while running DMK Data Manager",
         );

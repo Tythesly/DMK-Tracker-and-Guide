@@ -681,3 +681,61 @@ button:disabled {
     flex-direction: column;
   }
 }
+.manager-warning-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 18px;
+  padding: 12px 15px;
+  border: 1px solid #d8c48c;
+  border-radius: 9px;
+  background: #fff9e9;
+  color: #725f2a;
+  font-size: 13px;
+}
+
+.form-field select {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid #b8c7d2;
+  border-radius: 7px;
+  outline: none;
+  background: #ffffff;
+  color: #203d53;
+}
+
+.form-field select:focus {
+  border-color: #4d82a7;
+  box-shadow:
+    0 0 0 3px
+    rgba(73, 127, 165, 0.1);
+}
+
+.form-two-column-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.record-pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.record-pill-premium {
+  border-color: #b8a7d7;
+  background: #f7f2fc;
+  color: #624b88;
+}
+
+@media (
+  max-width: 650px
+) {
+  .form-two-column-grid {
+    grid-template-columns:
+      1fr;
+  }
+}

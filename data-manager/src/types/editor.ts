@@ -14,3 +14,26 @@ export type CollectionInput = {
   isActive: boolean;
   notes: string;
 };
+
+export type CharacterRecord = {
+  id: string;
+  collectionId: string;
+  collectionName: string;
+  displayName: string;
+  maxLevel: number;
+  sortOrder: number;
+  isPremium: boolean;
+  isLimitedTime: boolean;
+  isActive: boolean;
+  notes: string;
+};
+
+export type CharacterInput = {
+  collectionId: string;
+  displayName: string;
+  sortOrder: number;
+  isPremium: boolean;
+  isLimitedTime: boolean;
+  isActive: boolean;
+  notes: string;
+};
