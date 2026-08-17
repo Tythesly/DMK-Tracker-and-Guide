@@ -27,6 +27,13 @@
       "csp": null
     }
   },
+  "plugins": {
+    "sql": {
+      "preload": [
+        "sqlite:dmk-editor.db"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
