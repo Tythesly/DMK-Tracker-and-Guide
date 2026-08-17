@@ -13,7 +13,6 @@ import {
   loadCharacterPlayerProgress,
   loadPlayerMagic,
   saveCharacterPlayerProgress,
-  savePlayerMagic,
 } from "../data/playerData";
 
 import type {
@@ -551,35 +550,6 @@ function CharacterDetailPage({
     markEdited();
   }
 
-  function handleMagicChange(
-    value: string,
-  ) {
-    const unformattedValue =
-      value
-        .replace(/,/g, "")
-        .trim();
-
-    const parsedValue =
-      Number.parseInt(
-        unformattedValue,
-        10,
-      );
-
-    const safeValue =
-      Number.isNaN(
-        parsedValue,
-      ) ||
-      parsedValue < 0
-        ? 0
-        : parsedValue;
-
-    setMagicQuantity(
-      safeValue,
-    );
-
-    markEdited();
-  }
-
   useEffect(() => {
     if (
       loadingCharacter ||
@@ -609,10 +579,6 @@ function CharacterDetailPage({
               currentLevel,
               tokens,
               tokenQuantities,
-            );
-
-            await savePlayerMagic(
-              magicQuantity,
             );
 
             if (
@@ -661,7 +627,6 @@ function CharacterDetailPage({
     currentLevel,
     isUnlocked,
     loadingCharacter,
-    magicQuantity,
     saveStatus,
     tokenQuantities,
     tokens,
@@ -982,193 +947,130 @@ function CharacterDetailPage({
         </div>
       </header>
 
-      <div className="character-detail-top-grid">
-        <section className="detail-card">
-          <div className="detail-card-header">
-            <div>
-              <h2>
-                Character
-                Progress
-              </h2>
+      <section className="detail-card">
+        <div className="detail-card-header">
+          <div>
+            <h2>
+              Character
+              Progress
+            </h2>
 
-              <p>
-                Track whether
-                the character
-                has been
-                welcomed and
-                their current
-                level.
-              </p>
-            </div>
+            <p>
+              Track whether
+              the character
+              has been
+              welcomed and
+              their current
+              level.
+            </p>
           </div>
+        </div>
 
-          <div className="progress-setting-list">
-            <div className="progress-setting-row">
-              <div>
-                <div className="setting-label">
-                  Welcomed
-                </div>
-
-                <div className="setting-help">
-                  Mark this
-                  character as
-                  part of your
-                  kingdom.
-                </div>
+        <div className="progress-setting-list">
+          <div className="progress-setting-row">
+            <div>
+              <div className="setting-label">
+                Welcomed
               </div>
 
-              <label className="checkbox-control">
-                <input
-                  type="checkbox"
-                  checked={
-                    isUnlocked
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    handleUnlockedChange(
-                      event
-                        .currentTarget
-                        .checked,
-                    )
-                  }
-                />
-
-                <span>
-                  {isUnlocked
-                    ? "Yes"
-                    : "No"}
-                </span>
-              </label>
+              <div className="setting-help">
+                Mark this
+                character as
+                part of your
+                kingdom.
+              </div>
             </div>
 
-            <div className="progress-setting-row">
-              <div>
-                <div className="setting-label">
-                  Character Level
-                </div>
-
-                <div className="setting-help">
-                  Current saved
-                  character
-                  level.
-                </div>
-              </div>
-
-              <select
-                className="detail-select"
-                value={
-                  currentLevel
+            <label className="checkbox-control">
+              <input
+                type="checkbox"
+                checked={
+                  isUnlocked
                 }
                 onChange={(
                   event,
                 ) =>
-                  handleLevelChange(
-                    Number(
-                      event
-                        .currentTarget
-                        .value,
-                    ),
+                  handleUnlockedChange(
+                    event
+                      .currentTarget
+                      .checked,
                   )
                 }
-              >
-                <option
-                  value={0}
-                >
-                  Not Welcomed
-                </option>
-
-                {Array.from(
-                  {
-                    length:
-                      character.max_level,
-                  },
-                  (
-                    _,
-                    index,
-                  ) =>
-                    index +
-                    1,
-                ).map(
-                  (level) => (
-                    <option
-                      key={
-                        level
-                      }
-                      value={
-                        level
-                      }
-                    >
-                      Level{" "}
-                      {level}
-                    </option>
-                  ),
-                )}
-              </select>
-            </div>
-          </div>
-        </section>
-
-        <section className="detail-card">
-          <div className="detail-card-header">
-            <div>
-              <h2>
-                Player Resources
-              </h2>
-
-              <p>
-                Resources
-                shared across
-                your locally
-                saved player
-                progress.
-              </p>
-            </div>
-          </div>
-
-          <div className="resource-entry">
-            <div className="resource-icon">
-              M
-            </div>
-
-            <div className="resource-entry-main">
-              <label htmlFor="player-magic">
-                Magic
-              </label>
+              />
 
               <span>
-                Current player
-                balance
+                {isUnlocked
+                  ? "Yes"
+                  : "No"}
               </span>
+            </label>
+          </div>
+
+          <div className="progress-setting-row">
+            <div>
+              <div className="setting-label">
+                Character Level
+              </div>
+
+              <div className="setting-help">
+                Current saved
+                character
+                level.
+              </div>
             </div>
 
-            <input
-              id="player-magic"
-              className="resource-quantity-input"
-              type="text"
-              inputMode="numeric"
-              value={magicQuantity.toLocaleString(
-                "en-US",
-              )}
+            <select
+              className="detail-select"
+              value={
+                currentLevel
+              }
               onChange={(
                 event,
               ) =>
-                handleMagicChange(
-                  event
-                    .currentTarget
-                    .value,
+                handleLevelChange(
+                  Number(
+                    event
+                      .currentTarget
+                      .value,
+                  ),
                 )
               }
-            />
-          </div>
+            >
+              <option
+                value={0}
+              >
+                Not Welcomed
+              </option>
 
-          <div className="local-save-note">
-            Progress saves
-            automatically to
-            this device.
+              {Array.from(
+                {
+                  length:
+                    character.max_level,
+                },
+                (
+                  _,
+                  index,
+                ) =>
+                  index + 1,
+              ).map(
+                (level) => (
+                  <option
+                    key={
+                      level
+                    }
+                    value={
+                      level
+                    }
+                  >
+                    Level{" "}
+                    {level}
+                  </option>
+                ),
+              )}
+            </select>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       <section className="detail-card token-inventory-card">
         <div className="detail-card-header">
@@ -1491,16 +1393,18 @@ function CharacterDetailPage({
                 <div className="requirement-metric">
                   <div>
                     <span className="requirement-metric-label">
-                      Magic
+                      {isWelcomeState
+                        ? "Welcome Cost"
+                        : "Level-Up Cost"}
                     </span>
 
                     <strong>
                       {activeMagicRequired ===
                       null
                         ? "Not stored"
-                        : formatNumber(
+                        : `${formatNumber(
                             activeMagicRequired,
-                          )}
+                          )} Magic`}
                     </strong>
                   </div>
 
@@ -1524,6 +1428,20 @@ function CharacterDetailPage({
                           )} remaining`}
                     </span>
                   )}
+                </div>
+
+                <div className="requirement-metric">
+                  <div>
+                    <span className="requirement-metric-label">
+                      Your Magic
+                    </span>
+
+                    <strong>
+                      {formatNumber(
+                        magicQuantity,
+                      )}
+                    </strong>
+                  </div>
                 </div>
 
                 <div className="requirement-metric">
