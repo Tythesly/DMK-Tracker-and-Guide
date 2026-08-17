@@ -3,6 +3,7 @@ import {
   useState,
 } from "react";
 
+import CharacterLevelsEditorPage from "./pages/CharacterLevelsEditorPage";
 import CharactersEditorPage from "./pages/CharactersEditorPage";
 import CollectionsEditorPage from "./pages/CollectionsEditorPage";
 import TokensEditorPage from "./pages/TokensEditorPage";
@@ -12,7 +13,8 @@ import "./App.css";
 type ManagerPage =
   | "collections"
   | "characters"
-  | "tokens";
+  | "tokens"
+  | "character-levels";
 
 function App() {
   const [
@@ -63,6 +65,55 @@ function App() {
 
     setActivePage(
       destination,
+    );
+  }
+
+  function renderActivePage() {
+    if (
+      activePage ===
+      "collections"
+    ) {
+      return (
+        <CollectionsEditorPage
+          onDirtyChange={
+            handleDirtyChange
+          }
+        />
+      );
+    }
+
+    if (
+      activePage ===
+      "characters"
+    ) {
+      return (
+        <CharactersEditorPage
+          onDirtyChange={
+            handleDirtyChange
+          }
+        />
+      );
+    }
+
+    if (
+      activePage ===
+      "tokens"
+    ) {
+      return (
+        <TokensEditorPage
+          onDirtyChange={
+            handleDirtyChange
+          }
+        />
+      );
+    }
+
+    return (
+      <CharacterLevelsEditorPage
+        onDirtyChange={
+          handleDirtyChange
+        }
+      />
     );
   }
 
@@ -143,13 +194,19 @@ function App() {
 
           <button
             type="button"
-            className="manager-nav-button"
-            disabled
+            className={
+              activePage ===
+              "character-levels"
+                ? "manager-nav-button manager-nav-button-active"
+                : "manager-nav-button"
+            }
+            onClick={() =>
+              navigate(
+                "character-levels",
+              )
+            }
           >
             Character Levels
-            <span>
-              Soon
-            </span>
           </button>
         </div>
 
@@ -220,27 +277,7 @@ function App() {
       </aside>
 
       <main className="manager-workspace">
-        {activePage ===
-        "collections" ? (
-          <CollectionsEditorPage
-            onDirtyChange={
-              handleDirtyChange
-            }
-          />
-        ) : activePage ===
-          "characters" ? (
-          <CharactersEditorPage
-            onDirtyChange={
-              handleDirtyChange
-            }
-          />
-        ) : (
-          <TokensEditorPage
-            onDirtyChange={
-              handleDirtyChange
-            }
-          />
-        )}
+        {renderActivePage()}
       </main>
     </div>
   );

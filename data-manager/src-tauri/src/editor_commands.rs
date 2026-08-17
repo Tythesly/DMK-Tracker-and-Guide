@@ -4,7 +4,10 @@ use sqlx::{
     Connection,
     SqliteConnection,
 };
-use std::time::Duration;
+use std::{
+    collections::HashSet,
+    time::Duration,
+};
 use tauri::{
     AppHandle,
     Manager,
@@ -23,6 +26,24 @@ pub struct CharacterWriteInput {
     pub is_limited_time: bool,
     pub is_active: bool,
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterLevelRequirementWriteInput {
+    pub token_id: String,
+    pub quantity: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterLevelWriteInput {
+    pub character_id: String,
+    pub target_level: i64,
+    pub magic_cost: Option<i64>,
+    pub level_time_seconds: Option<i64>,
+    pub requirements:
+        Vec<CharacterLevelRequirementWriteInput>,
 }
 
 async fn open_editor_connection(
@@ -99,28 +120,94 @@ fn validate_character_input(
     Ok(())
 }
 
-async fn collection_exists(
-    connection: &mut SqliteConnection,
-    collection_id: &str,
-) -> Result<bool, String> {
-    let count =
-        sqlx::query_scalar::<_, i64>(
-            "
-            SELECT COUNT(*)
-            FROM collections
-            WHERE id = ?
-            ",
-        )
-        .bind(collection_id)
-        .fetch_one(connection)
-        .await
-        .map_err(|error| {
-            format!(
-                "Unable to verify the selected collection: {error}"
-            )
-        })?;
+fn validate_character_level_input(
+    input: &CharacterLevelWriteInput,
+) -> Result<(), String> {
+    if input
+        .character_id
+        .trim()
+        .is_empty()
+    {
+        return Err(
+            "Character is required."
+                .to_string(),
+        );
+    }
 
-    Ok(count > 0)
+    if !(
+        1..=CHARACTER_MAX_LEVEL
+    )
+    .contains(
+        &input.target_level,
+    )
+    {
+        return Err(
+            "Target Level must be between 1 and 10."
+                .to_string(),
+        );
+    }
+
+    if let Some(
+        magic_cost,
+    ) = input.magic_cost
+    {
+        if magic_cost < 0 {
+            return Err(
+                "Magic Cost cannot be negative."
+                    .to_string(),
+            );
+        }
+    }
+
+    if let Some(
+        level_time_seconds,
+    ) =
+        input.level_time_seconds
+    {
+        if level_time_seconds < 0 {
+            return Err(
+                "Level Time cannot be negative."
+                    .to_string(),
+            );
+        }
+    }
+
+    let mut token_ids =
+        HashSet::new();
+
+    for requirement in
+        &input.requirements
+    {
+        let token_id =
+            requirement
+                .token_id
+                .trim();
+
+        if token_id.is_empty() {
+            return Err(
+                "Every token requirement must select a token."
+                    .to_string(),
+            );
+        }
+
+        if requirement.quantity <= 0 {
+            return Err(
+                "Token requirement quantities must be greater than 0."
+                    .to_string(),
+            );
+        }
+
+        if !token_ids.insert(
+            token_id.to_string(),
+        ) {
+            return Err(
+                "The same token cannot be added more than once to a level."
+                    .to_string(),
+            );
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -170,6 +257,11 @@ pub async fn create_character_with_sort(
         })?;
 
     if collection_count == 0 {
+        let _ =
+            transaction
+                .rollback()
+                .await;
+
         return Err(
             "The selected collection no longer exists."
                 .to_string(),
@@ -196,6 +288,11 @@ pub async fn create_character_with_sort(
         })?;
 
     if id_count > 0 {
+        let _ =
+            transaction
+                .rollback()
+                .await;
+
         return Err(
             "A character with this Stable ID already exists."
                 .to_string(),
@@ -231,6 +328,11 @@ pub async fn create_character_with_sort(
         })?;
 
     if duplicate_name_count > 0 {
+        let _ =
+            transaction
+                .rollback()
+                .await;
+
         return Err(
             "A character with this display name already exists in the selected collection."
                 .to_string(),
@@ -431,6 +533,11 @@ pub async fn update_character_with_sort(
         old_sort_order,
     )) = existing
     else {
+        let _ =
+            transaction
+                .rollback()
+                .await;
+
         return Err(
             "The character could not be updated because its record was not found."
                 .to_string(),
@@ -459,6 +566,11 @@ pub async fn update_character_with_sort(
         })?;
 
     if collection_count == 0 {
+        let _ =
+            transaction
+                .rollback()
+                .await;
+
         return Err(
             "The selected collection no longer exists."
                 .to_string(),
@@ -496,6 +608,11 @@ pub async fn update_character_with_sort(
         })?;
 
     if duplicate_name_count > 0 {
+        let _ =
+            transaction
+                .rollback()
+                .await;
+
         return Err(
             "A character with this display name already exists in the selected collection."
                 .to_string(),
@@ -722,6 +839,234 @@ pub async fn update_character_with_sort(
         .map_err(|error| {
             format!(
                 "Unable to commit the character update: {error}"
+            )
+        })?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_character_level(
+    app: AppHandle,
+    input: CharacterLevelWriteInput,
+) -> Result<(), String> {
+    validate_character_level_input(
+        &input,
+    )?;
+
+    let mut connection =
+        open_editor_connection(
+            &app,
+        )
+        .await?;
+
+    let mut transaction =
+        connection
+            .begin()
+            .await
+            .map_err(|error| {
+                format!(
+                    "Unable to start the character level transaction: {error}"
+                )
+            })?;
+
+    let character_count =
+        sqlx::query_scalar::<_, i64>(
+            "
+            SELECT COUNT(*)
+            FROM characters
+            WHERE id = ?
+            ",
+        )
+        .bind(
+            input.character_id.trim(),
+        )
+        .fetch_one(
+            &mut *transaction,
+        )
+        .await
+        .map_err(|error| {
+            format!(
+                "Unable to verify the selected character: {error}"
+            )
+        })?;
+
+    if character_count == 0 {
+        let _ =
+            transaction
+                .rollback()
+                .await;
+
+        return Err(
+            "The selected character no longer exists."
+                .to_string(),
+        );
+    }
+
+    for requirement in
+        &input.requirements
+    {
+        let token_count =
+            sqlx::query_scalar::<_, i64>(
+                "
+                SELECT COUNT(*)
+                FROM tokens
+                WHERE id = ?
+                ",
+            )
+            .bind(
+                requirement
+                    .token_id
+                    .trim(),
+            )
+            .fetch_one(
+                &mut *transaction,
+            )
+            .await
+            .map_err(|error| {
+                format!(
+                    "Unable to verify a required token: {error}"
+                )
+            })?;
+
+        if token_count == 0 {
+            let _ =
+                transaction
+                    .rollback()
+                    .await;
+
+            return Err(
+                format!(
+                    "Required token '{}' no longer exists.",
+                    requirement.token_id
+                ),
+            );
+        }
+    }
+
+    sqlx::query(
+        "
+        INSERT INTO character_levels (
+            character_id,
+            target_level,
+            magic_cost,
+            level_time_seconds
+        )
+        VALUES (
+            ?,
+            ?,
+            ?,
+            ?
+        )
+        ON CONFLICT (
+            character_id,
+            target_level
+        )
+        DO UPDATE SET
+            magic_cost =
+                excluded.magic_cost,
+            level_time_seconds =
+                excluded.level_time_seconds
+        ",
+    )
+    .bind(
+        input.character_id.trim(),
+    )
+    .bind(
+        input.target_level,
+    )
+    .bind(
+        input.magic_cost,
+    )
+    .bind(
+        input.level_time_seconds,
+    )
+    .execute(
+        &mut *transaction,
+    )
+    .await
+    .map_err(|error| {
+        format!(
+            "Unable to save the character level: {error}"
+        )
+    })?;
+
+    sqlx::query(
+        "
+        DELETE FROM
+            character_level_token_requirements
+        WHERE
+            character_id = ?
+            AND target_level = ?
+        ",
+    )
+    .bind(
+        input.character_id.trim(),
+    )
+    .bind(
+        input.target_level,
+    )
+    .execute(
+        &mut *transaction,
+    )
+    .await
+    .map_err(|error| {
+        format!(
+            "Unable to replace the level's token requirements: {error}"
+        )
+    })?;
+
+    for requirement in
+        &input.requirements
+    {
+        sqlx::query(
+            "
+            INSERT INTO
+                character_level_token_requirements (
+                    character_id,
+                    target_level,
+                    token_id,
+                    quantity
+                )
+            VALUES (
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            ",
+        )
+        .bind(
+            input.character_id.trim(),
+        )
+        .bind(
+            input.target_level,
+        )
+        .bind(
+            requirement
+                .token_id
+                .trim(),
+        )
+        .bind(
+            requirement.quantity,
+        )
+        .execute(
+            &mut *transaction,
+        )
+        .await
+        .map_err(|error| {
+            format!(
+                "Unable to save a token requirement: {error}"
+            )
+        })?;
+    }
+
+    transaction
+        .commit()
+        .await
+        .map_err(|error| {
+            format!(
+                "Unable to commit the character level save: {error}"
             )
         })?;
 

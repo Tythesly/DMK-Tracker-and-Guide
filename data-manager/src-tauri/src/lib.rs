@@ -28,6 +28,7 @@ pub fn run() {
             tauri::generate_handler![
                 editor_commands::create_character_with_sort,
                 editor_commands::update_character_with_sort,
+                editor_commands::save_character_level,
             ],
         )
         .plugin(

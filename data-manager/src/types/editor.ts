@@ -84,3 +84,36 @@ export type TokenInput = {
   isActive: boolean;
   notes: string;
 };
+
+export type CharacterLevelTokenRequirementRecord = {
+  tokenId: string;
+  tokenName: string;
+  tokenType: string;
+  rarity: TokenRarity | null;
+  quantity: number;
+};
+
+export type CharacterLevelRecord = {
+  characterId: string;
+  targetLevel: number;
+  magicCost: number | null;
+  levelTimeSeconds: number | null;
+
+  requirements:
+    CharacterLevelTokenRequirementRecord[];
+};
+
+export type CharacterLevelRequirementInput = {
+  tokenId: string;
+  quantity: number;
+};
+
+export type CharacterLevelInput = {
+  characterId: string;
+  targetLevel: number;
+  magicCost: number | null;
+  levelTimeSeconds: number | null;
+
+  requirements:
+    CharacterLevelRequirementInput[];
+};
