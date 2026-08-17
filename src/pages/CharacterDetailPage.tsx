@@ -21,6 +21,11 @@ import type {
   TokenQuantities,
 } from "../types/dmk";
 
+type CharacterDetailPageProps = {
+  initialCharacterId?: string;
+  onBack?: () => void;
+};
+
 function formatDuration(seconds: number | null) {
   if (seconds === null) {
     return "Not stored";
@@ -79,7 +84,10 @@ function formatNumber(value: number | null) {
   return value.toLocaleString("en-US");
 }
 
-function CharacterDetailPage() {
+function CharacterDetailPage({
+  initialCharacterId,
+  onBack,
+}: CharacterDetailPageProps) {
   const [characters, setCharacters] =
     useState<Character[]>([]);
 
@@ -153,8 +161,18 @@ function CharacterDetailPage() {
 
         setCharacters(loadedCharacters);
 
+        const requestedCharacterExists =
+          initialCharacterId !== undefined &&
+          loadedCharacters.some(
+            (availableCharacter) =>
+              availableCharacter.id ===
+              initialCharacterId,
+          );
+
         setSelectedCharacterId(
-          loadedCharacters[0].id,
+          requestedCharacterExists
+            ? initialCharacterId
+            : loadedCharacters[0].id,
         );
       } catch (err) {
         if (!cancelled) {
@@ -176,7 +194,7 @@ function CharacterDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialCharacterId]);
 
   useEffect(() => {
     if (!selectedCharacterId) {
@@ -548,6 +566,21 @@ function CharacterDetailPage() {
         DMK Complete Tracker & Guide
       </h1>
 
+      {onBack && (
+        <p>
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={
+              saveStatus === "pending" ||
+              saveStatus === "saving"
+            }
+          >
+            ← Back to Characters
+          </button>
+        </p>
+      )}
+
       <section>
         <p>
           <label htmlFor="character-select">
@@ -579,7 +612,7 @@ function CharacterDetailPage() {
                   {
                     availableCharacter.display_name
                   }{" "}
-                  ΓÇö{" "}
+                  —{" "}
                   {
                     availableCharacter.collection_name
                   }
@@ -711,7 +744,7 @@ function CharacterDetailPage() {
         {currentLevel >=
         character.max_level ? (
           <h3>
-            Γ£ô {character.display_name} is
+            ✓ {character.display_name} is
             at maximum level.
           </h3>
         ) : currentLevel === 0 &&
@@ -755,7 +788,7 @@ function CharacterDetailPage() {
                         {
                           requirement.quantity
                         }
-                        {" ΓÇö "}
+                        {" — "}
                         {remaining} remaining
                       </li>
                     );
@@ -777,7 +810,7 @@ function CharacterDetailPage() {
                   {formatNumber(
                     welcomeMagicRequired,
                   )}
-                  {" ΓÇö "}
+                  {" — "}
                   {welcomeMagicReady
                     ? "Enough"
                     : `${formatNumber(
@@ -803,13 +836,13 @@ function CharacterDetailPage() {
 
             {!welcomeReadinessDataComplete ? (
               <p>
-                ΓÜá Readiness cannot be
+                ⚠ Readiness cannot be
                 calculated because required
                 Welcome data is incomplete.
               </p>
             ) : readyToWelcome ? (
               <h3>
-                Γ£ô Ready to Welcome
+                ✓ Ready to Welcome
               </h3>
             ) : (
               <h3>
@@ -859,7 +892,7 @@ function CharacterDetailPage() {
                         {
                           requirement.quantity
                         }
-                        {" ΓÇö "}
+                        {" — "}
                         {remaining} remaining
                       </li>
                     );
@@ -882,7 +915,7 @@ function CharacterDetailPage() {
                   {formatNumber(
                     nextLevelMagicRequired,
                   )}
-                  {" ΓÇö "}
+                  {" — "}
                   {nextLevelMagicReady
                     ? "Enough"
                     : `${formatNumber(
@@ -908,13 +941,13 @@ function CharacterDetailPage() {
 
             {!nextLevelReadinessDataComplete ? (
               <p>
-                ΓÜá Readiness cannot be
+                ⚠ Readiness cannot be
                 calculated because required
                 level-up data is incomplete.
               </p>
             ) : readyToLevelUp ? (
               <h3>
-                Γ£ô Ready to Level Up
+                ✓ Ready to Level Up
               </h3>
             ) : (
               <h3>
@@ -935,7 +968,7 @@ function CharacterDetailPage() {
             "Saving..."}
 
           {saveStatus === "saved" &&
-            "Γ£ô Saved"}
+            "✓ Saved"}
 
           {saveStatus === "error" &&
             "Unable to save progress."}
@@ -955,4 +988,3 @@ function CharacterDetailPage() {
 }
 
 export default CharacterDetailPage;
-
