@@ -25,3 +25,13 @@ dist-ssr
 
 # Visual Studio local files
 .vs/
+
+# Environment and secret files
+.env
+.env.*
+!.env.example
+
+# Local player database files
+dmk-player.db
+dmk-player.db-wal
+dmk-player.db-shm
