@@ -1,18 +1,122 @@
 import { useEffect, useState } from "react";
 
-import { getAllCharacters } from "../data/gameData";
+import {
+  getAllCharacters,
+  loadCharacterGameData,
+} from "../data/gameData";
 
-import type { Character } from "../types/dmk";
+import {
+  loadCharacterPlayerProgress,
+  loadPlayerMagic,
+} from "../data/playerData";
+
+import type {
+  Character,
+  CharacterLevel,
+  LevelRequirement,
+  TokenQuantities,
+} from "../types/dmk";
 
 type CharactersOverviewPageProps = {
   onOpenCharacter: (characterId: string) => void;
 };
 
+type CharacterSummary = {
+  character: Character;
+  isUnlocked: boolean;
+  currentLevel: number;
+  progressLabel: string;
+  readinessLabel: string;
+};
+
+function calculateReadiness(
+  character: Character,
+  isUnlocked: boolean,
+  currentLevel: number,
+  tokenQuantities: TokenQuantities,
+  requirements: LevelRequirement[],
+  levels: CharacterLevel[],
+  magicQuantity: number,
+) {
+  if (currentLevel >= character.max_level) {
+    return {
+      progressLabel: "Max Level",
+      readinessLabel: "Complete",
+    };
+  }
+
+  const targetLevel =
+    currentLevel === 0 && !isUnlocked
+      ? 1
+      : currentLevel + 1;
+
+  const targetRequirements =
+    requirements.filter(
+      (requirement) =>
+        requirement.target_level ===
+        targetLevel,
+    );
+
+  const targetLevelData =
+    levels.find(
+      (level) =>
+        level.target_level === targetLevel,
+    ) ?? null;
+
+  const magicRequired =
+    targetLevelData?.magic_cost ?? null;
+
+  const readinessDataComplete =
+    targetRequirements.length > 0 &&
+    targetLevelData !== null &&
+    magicRequired !== null;
+
+  const tokensReady =
+    targetRequirements.length > 0 &&
+    targetRequirements.every(
+      (requirement) =>
+        (tokenQuantities[
+          requirement.token_id
+        ] ?? 0) >= requirement.quantity,
+    );
+
+  const magicReady =
+    magicRequired !== null &&
+    magicQuantity >= magicRequired;
+
+  const ready =
+    readinessDataComplete &&
+    tokensReady &&
+    magicReady;
+
+  if (currentLevel === 0 && !isUnlocked) {
+    return {
+      progressLabel: "Not Welcomed",
+      readinessLabel:
+        !readinessDataComplete
+          ? "Readiness unavailable"
+          : ready
+            ? "Ready to Welcome"
+            : "Not Ready to Welcome",
+    };
+  }
+
+  return {
+    progressLabel: `Level ${currentLevel}`,
+    readinessLabel:
+      !readinessDataComplete
+        ? "Readiness unavailable"
+        : ready
+          ? "Ready to Level Up"
+          : "Not Ready to Level Up",
+  };
+}
+
 function CharactersOverviewPage({
   onOpenCharacter,
 }: CharactersOverviewPageProps) {
-  const [characters, setCharacters] =
-    useState<Character[]>([]);
+  const [summaries, setSummaries] =
+    useState<CharacterSummary[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -25,14 +129,64 @@ function CharactersOverviewPage({
 
     async function loadCharacters() {
       try {
-        const loadedCharacters =
-          await getAllCharacters();
+        const [
+          loadedCharacters,
+          magicQuantity,
+        ] = await Promise.all([
+          getAllCharacters(),
+          loadPlayerMagic(),
+        ]);
+
+        const loadedSummaries =
+          await Promise.all(
+            loadedCharacters.map(
+              async (character) => {
+                const {
+                  tokens,
+                  requirements,
+                  levels,
+                } =
+                  await loadCharacterGameData(
+                    character.id,
+                  );
+
+                const playerProgress =
+                  await loadCharacterPlayerProgress(
+                    character.id,
+                    tokens,
+                  );
+
+                const {
+                  progressLabel,
+                  readinessLabel,
+                } = calculateReadiness(
+                  character,
+                  playerProgress.isUnlocked,
+                  playerProgress.currentLevel,
+                  playerProgress.tokenQuantities,
+                  requirements,
+                  levels,
+                  magicQuantity,
+                );
+
+                return {
+                  character,
+                  isUnlocked:
+                    playerProgress.isUnlocked,
+                  currentLevel:
+                    playerProgress.currentLevel,
+                  progressLabel,
+                  readinessLabel,
+                };
+              },
+            ),
+          );
 
         if (cancelled) {
           return;
         }
 
-        setCharacters(loadedCharacters);
+        setSummaries(loadedSummaries);
       } catch (err) {
         if (!cancelled) {
           setLoadError(
@@ -62,7 +216,9 @@ function CharactersOverviewPage({
           DMK Complete Tracker & Guide
         </h1>
 
-        <p>Loading characters...</p>
+        <p>
+          Loading character progress...
+        </p>
       </main>
     );
   }
@@ -92,31 +248,53 @@ function CharactersOverviewPage({
       <h2>Characters</h2>
 
       <p>
-        Select a character to view their
-        progress, tokens, requirements, and
-        readiness.
+        View your character progress and
+        open a character for detailed token,
+        level-up, and readiness information.
       </p>
 
-      {characters.length === 0 ? (
+      {summaries.length === 0 ? (
         <p>
           No active characters were found.
         </p>
       ) : (
-        characters.map((character) => (
-          <section key={character.id}>
+        summaries.map((summary) => (
+          <section
+            key={summary.character.id}
+          >
             <h3>
-              {character.display_name}
+              {
+                summary.character
+                  .display_name
+              }
             </h3>
 
             <p>
-              {character.collection_name}
+              {
+                summary.character
+                  .collection_name
+              }
+            </p>
+
+            <p>
+              <strong>
+                Progress:
+              </strong>{" "}
+              {summary.progressLabel}
+            </p>
+
+            <p>
+              <strong>
+                Status:
+              </strong>{" "}
+              {summary.readinessLabel}
             </p>
 
             <button
               type="button"
               onClick={() =>
                 onOpenCharacter(
-                  character.id,
+                  summary.character.id,
                 )
               }
             >
