@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import type {
+  ReactNode,
+} from "react";
 
 export type ShellPage =
   | "summary"
@@ -13,8 +15,9 @@ export type ShellPage =
 type AppShellProps = {
   activePage: ShellPage;
   children: ReactNode;
-  onNavigate: (page: ShellPage) => void;
-  navigationLocked?: boolean;
+  onNavigate: (
+    page: ShellPage,
+  ) => void;
 };
 
 type NavigationItem = {
@@ -23,54 +26,54 @@ type NavigationItem = {
   icon: string;
 };
 
-const navigationItems: NavigationItem[] = [
-  {
-    id: "summary",
-    label: "Summary & Guide",
-    icon: "▦",
-  },
-  {
-    id: "characters",
-    label: "Characters",
-    icon: "●",
-  },
-  {
-    id: "attractions",
-    label: "Attractions",
-    icon: "▲",
-  },
-  {
-    id: "questChecklist",
-    label: "Quest Checklist",
-    icon: "✓",
-  },
-  {
-    id: "tokenActivities",
-    label: "Token Activities",
-    icon: "◎",
-  },
-  {
-    id: "collections",
-    label: "Collections",
-    icon: "■",
-  },
-  {
-    id: "fullGuide",
-    label: "Full Guide",
-    icon: "▥",
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    icon: "⚙︎",
-  },
-];
+const navigationItems: NavigationItem[] =
+  [
+    {
+      id: "summary",
+      label: "Summary & Guide",
+      icon: "▦",
+    },
+    {
+      id: "characters",
+      label: "Characters",
+      icon: "●",
+    },
+    {
+      id: "attractions",
+      label: "Attractions",
+      icon: "▲",
+    },
+    {
+      id: "questChecklist",
+      label: "Quest Checklist",
+      icon: "✓",
+    },
+    {
+      id: "tokenActivities",
+      label: "Token Activities",
+      icon: "◎",
+    },
+    {
+      id: "collections",
+      label: "Collections",
+      icon: "■",
+    },
+    {
+      id: "fullGuide",
+      label: "Full Guide",
+      icon: "▥",
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      icon: "⚙︎",
+    },
+  ];
 
 function AppShell({
   activePage,
   children,
   onNavigate,
-  navigationLocked = false,
 }: AppShellProps) {
   return (
     <div className="app-shell">
@@ -97,35 +100,41 @@ function AppShell({
           className="sidebar-navigation"
           aria-label="Application navigation"
         >
-          {navigationItems.map((item) => {
-            const active =
-              item.id === activePage;
+          {navigationItems.map(
+            (item) => {
+              const active =
+                item.id ===
+                activePage;
 
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={
-                  active
-                    ? "sidebar-nav-button sidebar-nav-button-active"
-                    : "sidebar-nav-button"
-                }
-                disabled={navigationLocked}
-                onClick={() =>
-                  onNavigate(item.id)
-                }
-              >
-                <span
-                  className="sidebar-nav-icon"
-                  aria-hidden="true"
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={
+                    active
+                      ? "sidebar-nav-button sidebar-nav-button-active"
+                      : "sidebar-nav-button"
+                  }
+                  onClick={() =>
+                    onNavigate(
+                      item.id,
+                    )
+                  }
                 >
-                  {item.icon}
-                </span>
+                  <span
+                    className="sidebar-nav-icon"
+                    aria-hidden="true"
+                  >
+                    {item.icon}
+                  </span>
 
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+                  <span>
+                    {item.label}
+                  </span>
+                </button>
+              );
+            },
+          )}
         </nav>
 
         <div className="sidebar-footer">
@@ -133,8 +142,15 @@ function AppShell({
             LOCAL-FIRST
           </div>
 
-          <div>No account • No cloud save</div>
-          <div>Progress stays on this device</div>
+          <div>
+            No account • No cloud
+            save
+          </div>
+
+          <div>
+            Progress stays on this
+            device
+          </div>
         </div>
       </aside>
 

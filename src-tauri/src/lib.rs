@@ -23,13 +23,21 @@ fn game_data_migrations() -> Vec<Migration> {
         Migration {
             version: 3,
             description: "correct_mickey_ears_display_name",
-            sql: include_str!("../migrations/003_game_correct_mickey_ears_name.sql"),
+            sql: include_str!(
+                "../migrations/003_game_correct_mickey_ears_name.sql"
+            ),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 4,
             description: "seed_minnie_development_data",
             sql: include_str!("../migrations/004_game_dev_seed_minnie.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "add_token_rarity",
+            sql: include_str!("../migrations/005_game_add_token_rarity.sql"),
             kind: MigrationKind::Up,
         },
     ]
@@ -57,8 +65,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:dmk-data.db", game_data_migrations())
-                .add_migrations("sqlite:dmk-player.db", player_data_migrations())
+                .add_migrations(
+                    "sqlite:dmk-data.db",
+                    game_data_migrations(),
+                )
+                .add_migrations(
+                    "sqlite:dmk-player.db",
+                    player_data_migrations(),
+                )
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())

@@ -1,4 +1,7 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import AppShell, {
   type ShellPage,
@@ -6,6 +9,10 @@ import AppShell, {
 
 import CharacterDetailPage from "./pages/CharacterDetailPage";
 import CharactersOverviewPage from "./pages/CharactersOverviewPage";
+
+import type {
+  SaveStatus,
+} from "./types/dmk";
 
 import "./App.css";
 
@@ -24,7 +31,10 @@ type PlaceholderDefinition = {
 };
 
 const placeholderPages: Record<
-  Exclude<ShellPage, "characters">,
+  Exclude<
+    ShellPage,
+    "characters"
+  >,
   PlaceholderDefinition
 > = {
   summary: {
@@ -67,7 +77,10 @@ const placeholderPages: Record<
 function PlaceholderPage({
   page,
 }: {
-  page: Exclude<ShellPage, "characters">;
+  page: Exclude<
+    ShellPage,
+    "characters"
+  >;
 }) {
   const definition =
     placeholderPages[page];
@@ -88,14 +101,17 @@ function PlaceholderPage({
 
       <section className="placeholder-card">
         <h2>
-          Screen coming in a later UI step
+          Screen coming in a later
+          UI step
         </h2>
 
         <p>
-          The application shell and navigation
-          are now in place. This screen will be
-          connected to the DMK data model as we
-          continue Step 2F.
+          The application shell and
+          navigation are already in
+          place. This screen will be
+          connected to the DMK data
+          model as development
+          continues.
         </p>
       </section>
     </main>
@@ -103,43 +119,150 @@ function PlaceholderPage({
 }
 
 function App() {
-  const [page, setPage] =
-    useState<AppPage>({
-      name: "characters",
-    });
+  const [
+    page,
+    setPage,
+  ] = useState<AppPage>({
+    name: "characters",
+  });
+
+  const [
+    characterSaveStatus,
+    setCharacterSaveStatus,
+  ] =
+    useState<SaveStatus>(
+      "idle",
+    );
+
+  const [
+    pendingNavigation,
+    setPendingNavigation,
+  ] =
+    useState<ShellPage | null>(
+      null,
+    );
 
   const activePage: ShellPage =
     page.name === "character"
       ? "characters"
       : page.name;
 
-  function handleNavigate(
+  function navigateImmediately(
     destination: ShellPage,
   ) {
+    setPendingNavigation(null);
+
+    setCharacterSaveStatus(
+      "idle",
+    );
+
     setPage({
       name: destination,
     });
   }
 
+  function handleNavigate(
+    destination: ShellPage,
+  ) {
+    if (
+      page.name === "character" &&
+      (characterSaveStatus ===
+        "pending" ||
+        characterSaveStatus ===
+          "saving")
+    ) {
+      setPendingNavigation(
+        destination,
+      );
+
+      return;
+    }
+
+    if (
+      page.name === "character" &&
+      characterSaveStatus ===
+        "error"
+    ) {
+      return;
+    }
+
+    navigateImmediately(
+      destination,
+    );
+  }
+
+  useEffect(() => {
+    if (
+      page.name !== "character" ||
+      pendingNavigation === null
+    ) {
+      return;
+    }
+
+    if (
+      characterSaveStatus ===
+        "saved" ||
+      characterSaveStatus ===
+        "idle"
+    ) {
+      const destination =
+        pendingNavigation;
+
+      setPendingNavigation(null);
+
+      setCharacterSaveStatus(
+        "idle",
+      );
+
+      setPage({
+        name: destination,
+      });
+
+      return;
+    }
+
+    if (
+      characterSaveStatus ===
+      "error"
+    ) {
+      setPendingNavigation(
+        null,
+      );
+    }
+  }, [
+    characterSaveStatus,
+    page.name,
+    pendingNavigation,
+  ]);
+
   let content;
 
-  if (page.name === "character") {
+  if (
+    page.name === "character"
+  ) {
     content = (
       <CharacterDetailPage
         initialCharacterId={
           page.characterId
         }
         onBack={() =>
-          setPage({
-            name: "characters",
-          })
+          handleNavigate(
+            "characters",
+          )
+        }
+        onSaveStatusChange={
+          setCharacterSaveStatus
         }
       />
     );
-  } else if (page.name === "characters") {
+  } else if (
+    page.name === "characters"
+  ) {
     content = (
       <CharactersOverviewPage
-        onOpenCharacter={(characterId) =>
+        onOpenCharacter={(
+          characterId,
+        ) =>
           setPage({
             name: "character",
             characterId,
@@ -149,16 +272,17 @@ function App() {
     );
   } else {
     content = (
-      <PlaceholderPage page={page.name} />
+      <PlaceholderPage
+        page={page.name}
+      />
     );
   }
 
   return (
     <AppShell
       activePage={activePage}
-      onNavigate={handleNavigate}
-      navigationLocked={
-        page.name === "character"
+      onNavigate={
+        handleNavigate
       }
     >
       {content}

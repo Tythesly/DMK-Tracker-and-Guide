@@ -7,14 +7,20 @@ import type {
   Token,
 } from "../types/dmk";
 
-const GAME_DATABASE = "sqlite:dmk-data.db";
+const GAME_DATABASE =
+  "sqlite:dmk-data.db";
 
 function getGameDatabase() {
-  return Database.get(GAME_DATABASE);
+  return Database.get(
+    GAME_DATABASE,
+  );
 }
 
-export async function getAllCharacters(): Promise<Character[]> {
-  const db = getGameDatabase();
+export async function getAllCharacters(): Promise<
+  Character[]
+> {
+  const db =
+    getGameDatabase();
 
   return db.select<Character[]>(
     `
@@ -39,22 +45,24 @@ export async function getAllCharacters(): Promise<Character[]> {
 export async function getCharacterById(
   characterId: string,
 ): Promise<Character> {
-  const db = getGameDatabase();
+  const db =
+    getGameDatabase();
 
-  const rows = await db.select<Character[]>(
-    `
-    SELECT
-      characters.id,
-      characters.display_name,
-      characters.max_level,
-      collections.display_name AS collection_name
-    FROM characters
-    INNER JOIN collections
-      ON collections.id = characters.collection_id
-    WHERE characters.id = $1
-    `,
-    [characterId],
-  );
+  const rows =
+    await db.select<Character[]>(
+      `
+      SELECT
+        characters.id,
+        characters.display_name,
+        characters.max_level,
+        collections.display_name AS collection_name
+      FROM characters
+      INNER JOIN collections
+        ON collections.id = characters.collection_id
+      WHERE characters.id = $1
+      `,
+      [characterId],
+    );
 
   if (rows.length !== 1) {
     throw new Error(
@@ -68,7 +76,8 @@ export async function getCharacterById(
 export async function getCharacterTokens(
   characterId: string,
 ): Promise<Token[]> {
-  const db = getGameDatabase();
+  const db =
+    getGameDatabase();
 
   return db.select<Token[]>(
     `
@@ -76,6 +85,7 @@ export async function getCharacterTokens(
       tokens.id,
       tokens.display_name,
       tokens.token_type,
+      tokens.rarity,
       tokens.sort_order
     FROM tokens
     INNER JOIN character_level_token_requirements AS requirements
@@ -92,10 +102,15 @@ export async function getCharacterTokens(
 
 export async function getCharacterLevelRequirements(
   characterId: string,
-): Promise<LevelRequirement[]> {
-  const db = getGameDatabase();
+): Promise<
+  LevelRequirement[]
+> {
+  const db =
+    getGameDatabase();
 
-  return db.select<LevelRequirement[]>(
+  return db.select<
+    LevelRequirement[]
+  >(
     `
     SELECT
       requirements.target_level,
@@ -117,10 +132,15 @@ export async function getCharacterLevelRequirements(
 
 export async function getCharacterLevels(
   characterId: string,
-): Promise<CharacterLevel[]> {
-  const db = getGameDatabase();
+): Promise<
+  CharacterLevel[]
+> {
+  const db =
+    getGameDatabase();
 
-  return db.select<CharacterLevel[]>(
+  return db.select<
+    CharacterLevel[]
+  >(
     `
     SELECT
       target_level,
@@ -143,10 +163,18 @@ export async function loadCharacterGameData(
     requirements,
     levels,
   ] = await Promise.all([
-    getCharacterById(characterId),
-    getCharacterTokens(characterId),
-    getCharacterLevelRequirements(characterId),
-    getCharacterLevels(characterId),
+    getCharacterById(
+      characterId,
+    ),
+    getCharacterTokens(
+      characterId,
+    ),
+    getCharacterLevelRequirements(
+      characterId,
+    ),
+    getCharacterLevels(
+      characterId,
+    ),
   ]);
 
   return {

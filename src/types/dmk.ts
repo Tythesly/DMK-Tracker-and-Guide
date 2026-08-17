@@ -9,6 +9,7 @@ export type Token = {
   id: string;
   display_name: string;
   token_type: string;
+  rarity: string | null;
 };
 
 export type LevelRequirement = {
@@ -39,7 +40,10 @@ export type PlayerResourceRow = {
   quantity: number;
 };
 
-export type TokenQuantities = Record<string, number>;
+export type TokenQuantities = Record<
+  string,
+  number
+>;
 
 export type SaveStatus =
   | "idle"

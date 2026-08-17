@@ -12,9 +12,15 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "DMK Complete Tracker & Guide",
-        "width": 800,
-        "height": 600
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 650,
+        "maximized": true,
+        "resizable": true,
+        "center": true
       }
     ],
     "security": {
