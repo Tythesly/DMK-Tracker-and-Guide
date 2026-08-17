@@ -78,7 +78,7 @@ function formatNumber(value: number | null) {
     return "Not stored";
   }
 
-  return value.toLocaleString();
+  return value.toLocaleString("en-US");
 }
 
 function App() {
@@ -322,22 +322,22 @@ function App() {
   }
 
   function handleMagicChange(value: string) {
-  const unformattedValue =
-    value.replace(/,/g, "").trim();
+    const unformattedValue =
+      value.replace(/,/g, "").trim();
 
-  const parsedValue =
-    Number.parseInt(unformattedValue, 10);
+    const parsedValue =
+      Number.parseInt(unformattedValue, 10);
 
-  const safeValue =
-    Number.isNaN(parsedValue) ||
-    parsedValue < 0
-      ? 0
-      : parsedValue;
+    const safeValue =
+      Number.isNaN(parsedValue) ||
+      parsedValue < 0
+        ? 0
+        : parsedValue;
 
-  setMagicQuantity(safeValue);
+    setMagicQuantity(safeValue);
 
-  markEdited();
-}
+    markEdited();
+  }
 
   useEffect(() => {
     if (
@@ -487,6 +487,58 @@ function App() {
       (level) => level.target_level === 1,
     ) ?? null;
 
+  const welcomeMagicRequired =
+    welcomeLevel?.magic_cost ?? null;
+
+  const nextLevelMagicRequired =
+    nextLevelData?.magic_cost ?? null;
+
+  const welcomeTokensReady =
+    welcomeRequirements.length > 0 &&
+    welcomeRequirements.every(
+      (requirement) =>
+        (tokenQuantities[
+          requirement.token_id
+        ] ?? 0) >= requirement.quantity,
+    );
+
+  const nextLevelTokensReady =
+    nextLevelRequirements.length > 0 &&
+    nextLevelRequirements.every(
+      (requirement) =>
+        (tokenQuantities[
+          requirement.token_id
+        ] ?? 0) >= requirement.quantity,
+    );
+
+  const welcomeMagicReady =
+    welcomeMagicRequired !== null &&
+    magicQuantity >= welcomeMagicRequired;
+
+  const nextLevelMagicReady =
+    nextLevelMagicRequired !== null &&
+    magicQuantity >= nextLevelMagicRequired;
+
+  const welcomeReadinessDataComplete =
+    welcomeRequirements.length > 0 &&
+    welcomeLevel !== null &&
+    welcomeMagicRequired !== null;
+
+  const nextLevelReadinessDataComplete =
+    nextLevelRequirements.length > 0 &&
+    nextLevelData !== null &&
+    nextLevelMagicRequired !== null;
+
+  const readyToWelcome =
+    welcomeReadinessDataComplete &&
+    welcomeTokensReady &&
+    welcomeMagicReady;
+
+  const readyToLevelUp =
+    nextLevelReadinessDataComplete &&
+    nextLevelTokensReady &&
+    nextLevelMagicReady;
+
   const characterSelectionDisabled =
     loadingCharacter ||
     saveStatus === "pending" ||
@@ -612,18 +664,18 @@ function App() {
           </label>
 
           <input
-           id="player-magic"
-          type="text"
-          inputMode="numeric"
-          value={magicQuantity.toLocaleString(
-            "en-US",
-          )}
-          onChange={(event) =>
-            handleMagicChange(
-              event.currentTarget.value,
-            )
-          }
-        />
+            id="player-magic"
+            type="text"
+            inputMode="numeric"
+            value={magicQuantity.toLocaleString(
+              "en-US",
+            )}
+            onChange={(event) =>
+              handleMagicChange(
+                event.currentTarget.value,
+              )
+            }
+          />
         </p>
 
         <h3>
@@ -716,9 +768,28 @@ function App() {
 
             <p>
               <strong>Magic:</strong>{" "}
-              {formatNumber(
-                welcomeLevel?.magic_cost ??
-                  null,
+              {welcomeMagicRequired === null ? (
+                "Requirement not stored"
+              ) : (
+                <>
+                  {formatNumber(
+                    magicQuantity,
+                  )}{" "}
+                  /{" "}
+                  {formatNumber(
+                    welcomeMagicRequired,
+                  )}
+                  {" — "}
+                  {welcomeMagicReady
+                    ? "Enough"
+                    : `${formatNumber(
+                        Math.max(
+                          welcomeMagicRequired -
+                            magicQuantity,
+                          0,
+                        ),
+                      )} remaining`}
+                </>
               )}
             </p>
 
@@ -731,6 +802,22 @@ function App() {
                   null,
               )}
             </p>
+
+            {!welcomeReadinessDataComplete ? (
+              <p>
+                ⚠ Readiness cannot be
+                calculated because required
+                Welcome data is incomplete.
+              </p>
+            ) : readyToWelcome ? (
+              <h3>
+                ✓ Ready to Welcome
+              </h3>
+            ) : (
+              <h3>
+                Not Ready to Welcome
+              </h3>
+            )}
           </>
         ) : (
           <>
@@ -785,9 +872,29 @@ function App() {
 
             <p>
               <strong>Magic:</strong>{" "}
-              {formatNumber(
-                nextLevelData?.magic_cost ??
-                  null,
+              {nextLevelMagicRequired ===
+              null ? (
+                "Requirement not stored"
+              ) : (
+                <>
+                  {formatNumber(
+                    magicQuantity,
+                  )}{" "}
+                  /{" "}
+                  {formatNumber(
+                    nextLevelMagicRequired,
+                  )}
+                  {" — "}
+                  {nextLevelMagicReady
+                    ? "Enough"
+                    : `${formatNumber(
+                        Math.max(
+                          nextLevelMagicRequired -
+                            magicQuantity,
+                          0,
+                        ),
+                      )} remaining`}
+                </>
               )}
             </p>
 
@@ -800,6 +907,22 @@ function App() {
                   null,
               )}
             </p>
+
+            {!nextLevelReadinessDataComplete ? (
+              <p>
+                ⚠ Readiness cannot be
+                calculated because required
+                level-up data is incomplete.
+              </p>
+            ) : readyToLevelUp ? (
+              <h3>
+                ✓ Ready to Level Up
+              </h3>
+            ) : (
+              <h3>
+                Not Ready to Level Up
+              </h3>
+            )}
           </>
         )}
 
