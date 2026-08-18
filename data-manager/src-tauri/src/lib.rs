@@ -30,6 +30,16 @@ fn editor_migrations() -> Vec<Migration> {
             kind:
                 MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description:
+                "add_attractions",
+            sql: include_str!(
+                "../migrations/003_editor_attractions.sql"
+            ),
+            kind:
+                MigrationKind::Up,
+        },
     ]
 }
 
