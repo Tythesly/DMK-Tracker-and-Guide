@@ -6,6 +6,7 @@ import {
 import CharacterLevelsEditorPage from "./pages/CharacterLevelsEditorPage";
 import CharactersEditorPage from "./pages/CharactersEditorPage";
 import CollectionsEditorPage from "./pages/CollectionsEditorPage";
+import MasterImportPage from "./pages/MasterImportPage";
 import TokensEditorPage from "./pages/TokensEditorPage";
 
 import "./App.css";
@@ -14,7 +15,8 @@ type ManagerPage =
   | "collections"
   | "characters"
   | "tokens"
-  | "character-levels";
+  | "character-levels"
+  | "master-import";
 
 function App() {
   const [
@@ -108,12 +110,21 @@ function App() {
       );
     }
 
+    if (
+      activePage ===
+      "character-levels"
+    ) {
+      return (
+        <CharacterLevelsEditorPage
+          onDirtyChange={
+            handleDirtyChange
+          }
+        />
+      );
+    }
+
     return (
-      <CharacterLevelsEditorPage
-        onDirtyChange={
-          handleDirtyChange
-        }
-      />
+      <MasterImportPage />
     );
   }
 
@@ -221,6 +232,7 @@ function App() {
             disabled
           >
             Validation
+
             <span>
               Soon
             </span>
@@ -228,13 +240,19 @@ function App() {
 
           <button
             type="button"
-            className="manager-nav-button"
-            disabled
+            className={
+              activePage ===
+              "master-import"
+                ? "manager-nav-button manager-nav-button-active"
+                : "manager-nav-button"
+            }
+            onClick={() =>
+              navigate(
+                "master-import",
+              )
+            }
           >
             Master Import
-            <span>
-              Soon
-            </span>
           </button>
 
           <button
@@ -243,6 +261,7 @@ function App() {
             disabled
           >
             Release Tools
+
             <span>
               Soon
             </span>
@@ -254,6 +273,7 @@ function App() {
             disabled
           >
             Settings
+
             <span>
               Soon
             </span>

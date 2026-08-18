@@ -1,4 +1,5 @@
 mod editor_commands;
+mod master_import;
 
 use tauri_plugin_sql::{
     Migration,
@@ -29,6 +30,7 @@ pub fn run() {
                 editor_commands::create_character_with_sort,
                 editor_commands::update_character_with_sort,
                 editor_commands::save_character_level,
+                master_import::inspect_master_workbook,
             ],
         )
         .plugin(
@@ -38,6 +40,9 @@ pub fn run() {
                     editor_migrations(),
                 )
                 .build(),
+        )
+        .plugin(
+            tauri_plugin_dialog::init(),
         )
         .plugin(
             tauri_plugin_opener::init(),
