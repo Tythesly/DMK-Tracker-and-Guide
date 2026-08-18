@@ -92,6 +92,52 @@ type MasterImportIdentityPlan = {
   notes: string[];
 };
 
+type ValuePlanFieldDifference = {
+  field: string;
+  workbookValue: string;
+  databaseValue: string;
+};
+
+type ValuePlanExample = {
+  status: string;
+  source: string;
+  displayName: string;
+  recordId: string | null;
+  detail: string;
+  differences: ValuePlanFieldDifference[];
+};
+
+type ValuePlanIssue = {
+  section: string;
+  source: string;
+  message: string;
+};
+
+type ValuePlanSection = {
+  key: string;
+  label: string;
+  workbookRecords: number;
+  databaseRecords: number;
+  newRecords: number;
+  unchangedRecords: number;
+  changedRecords: number;
+  invalidRecords: number;
+  unresolvedReferences: number;
+  databaseOnlyRecords: number;
+  comparedFields: string[];
+  examples: ValuePlanExample[];
+};
+
+type MasterImportValuePlan = {
+  fileName: string;
+  workbookVersion: string | null;
+  planReady: boolean;
+  sections: ValuePlanSection[];
+  issues: ValuePlanIssue[];
+  deferredReferences: ValuePlanIssue[];
+  notes: string[];
+};
+
 function formatFileSize(
   bytes: number,
 ) {
@@ -197,6 +243,58 @@ function planStatusClass(
   return "identity-example-status";
 }
 
+function valueStatusLabel(
+  status: string,
+) {
+  switch (
+    status
+      .trim()
+      .toLowerCase()
+  ) {
+    case "unchanged":
+      return "Unchanged";
+
+    case "changed":
+      return "Changed";
+
+    case "new":
+      return "New";
+
+    case "invalid":
+      return "Invalid";
+
+    default:
+      return status;
+  }
+}
+
+function valueStatusClass(
+  status: string,
+) {
+  const normalized =
+    status
+      .trim()
+      .toLowerCase();
+
+  if (normalized === "unchanged") {
+    return "identity-example-status identity-example-status-matched";
+  }
+
+  if (normalized === "new") {
+    return "identity-example-status identity-example-status-new";
+  }
+
+  if (normalized === "changed") {
+    return "identity-example-status value-example-status-changed";
+  }
+
+  if (normalized === "invalid") {
+    return "identity-example-status identity-example-status-error";
+  }
+
+  return "identity-example-status";
+}
+
 function MasterImportPage() {
   const [
     inspection,
@@ -222,6 +320,14 @@ function MasterImportPage() {
     >(null);
 
   const [
+    valuePlan,
+    setValuePlan,
+  ] =
+    useState<
+      MasterImportValuePlan | null
+    >(null);
+
+  const [
     inspecting,
     setInspecting,
   ] = useState(false);
@@ -229,6 +335,11 @@ function MasterImportPage() {
   const [
     buildingPlan,
     setBuildingPlan,
+  ] = useState(false);
+
+  const [
+    buildingValuePlan,
+    setBuildingValuePlan,
   ] = useState(false);
 
   const [
@@ -247,9 +358,18 @@ function MasterImportPage() {
       null,
     );
 
+  const [
+    valuePlanError,
+    setValuePlanError,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
   async function selectWorkbook() {
     setError(null);
     setPlanError(null);
+    setValuePlanError(null);
 
     const selected =
       await open({
@@ -293,6 +413,7 @@ function MasterImportPage() {
     setInspecting(true);
     setInspection(null);
     setIdentityPlan(null);
+    setValuePlan(null);
     setSelectedPath(
       selected,
     );
@@ -344,8 +465,10 @@ function MasterImportPage() {
     }
 
     setPlanError(null);
+    setValuePlanError(null);
     setBuildingPlan(true);
     setIdentityPlan(null);
+    setValuePlan(null);
 
     try {
       const result =
@@ -383,6 +506,54 @@ function MasterImportPage() {
     }
   }
 
+  async function buildValuePlan() {
+    if (
+      !selectedPath ||
+      !identityPlan?.planReady
+    ) {
+      return;
+    }
+
+    setValuePlanError(null);
+    setBuildingValuePlan(true);
+    setValuePlan(null);
+
+    try {
+      const result =
+        await invoke<
+          MasterImportValuePlan
+        >(
+          "build_master_import_value_plan",
+          {
+            path:
+              selectedPath,
+          },
+        );
+
+      setValuePlan(
+        result,
+      );
+    } catch (caughtError) {
+      console.error(
+        "Master import value plan failed:",
+        caughtError,
+      );
+
+      setValuePlanError(
+        caughtError instanceof
+          Error
+          ? caughtError.message
+          : String(
+              caughtError,
+            ),
+      );
+    } finally {
+      setBuildingValuePlan(
+        false,
+      );
+    }
+  }
+
   const statusLabel =
     inspection === null
       ? "No workbook selected"
@@ -397,6 +568,14 @@ function MasterImportPage() {
       : identityPlan.planReady
         ? "Identity mapping ready"
         : "Identity review required";
+
+
+  const valuePlanStatus =
+    valuePlan === null
+      ? "Not built"
+      : valuePlan.planReady
+        ? "Value comparison ready"
+        : "Value review required";
 
   return (
     <>
@@ -413,9 +592,9 @@ function MasterImportPage() {
           <p>
             Inspect the
             authoritative DMK
-            Master workbook and
-            build a read-only
-            identity mapping plan
+            Master workbook, map
+            record identities, and
+            compare actual values
             before any game data
             can be imported.
           </p>
@@ -428,8 +607,9 @@ function MasterImportPage() {
         </strong>
 
         <span>
-          Inspection and identity
-          mapping do not add,
+          Inspection, identity
+          mapping, and actual value
+          comparison do not add,
           update, deactivate, or
           remove anything in
           dmk-editor.db.
@@ -461,6 +641,18 @@ function MasterImportPage() {
         </div>
       )}
 
+      {valuePlanError && (
+        <div className="manager-error-banner">
+          <strong>
+            Value comparison failed
+          </strong>
+
+          <span>
+            {valuePlanError}
+          </span>
+        </div>
+      )}
+
       <section className="manager-panel master-import-picker">
         <div>
           <div className="master-import-picker-title">
@@ -486,7 +678,8 @@ function MasterImportPage() {
           className="primary-button"
           disabled={
             inspecting ||
-            buildingPlan
+            buildingPlan ||
+            buildingValuePlan
           }
           onClick={() =>
             void selectWorkbook()
@@ -1234,6 +1427,471 @@ function MasterImportPage() {
             </>
           )}
 
+          {identityPlan?.planReady && (
+            <section className="manager-panel value-plan-action-panel">
+              <div>
+                <div className="manager-eyebrow">
+                  DRY-RUN VALUE COMPARISON
+                </div>
+
+                <h2>
+                  Compare Actual
+                  Values
+                </h2>
+
+                <p>
+                  Compare the actual
+                  workbook values for
+                  collections,
+                  characters, tokens,
+                  rarity, Magic, times,
+                  and token requirements
+                  against dmk-editor.db.
+                  This remains read-only.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="primary-button"
+                disabled={
+                  !selectedPath ||
+                  buildingValuePlan
+                }
+                onClick={() =>
+                  void buildValuePlan()
+                }
+              >
+                {buildingValuePlan
+                  ? "Comparing Values..."
+                  : valuePlan
+                    ? "Rebuild Value Comparison"
+                    : "Compare Actual Values"}
+              </button>
+            </section>
+          )}
+
+          {valuePlan && (
+            <>
+              <section className="database-status-bar value-plan-status-bar">
+                <div>
+                  <strong>
+                    Actual Value
+                    Comparison
+                  </strong>
+
+                  <span>
+                    {valuePlan
+                      .workbookVersion ??
+                      valuePlan.fileName}
+                  </span>
+                </div>
+
+                <div
+                  className={
+                    valuePlan.planReady
+                      ? "database-status-pill"
+                      : "master-import-review-pill"
+                  }
+                >
+                  {valuePlanStatus}
+                </div>
+              </section>
+
+              <section className="manager-panel value-plan-panel">
+                <div className="manager-panel-header">
+                  <div>
+                    <h2>
+                      Actual Value
+                      Summary
+                    </h2>
+
+                    <p>
+                      Matched identities
+                      are now classified as
+                      unchanged or changed.
+                      New records show the
+                      values a future import
+                      would create.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="value-plan-grid">
+                  {valuePlan.sections.map(
+                    (section) => (
+                      <article
+                        key={section.key}
+                        className="value-plan-card"
+                      >
+                        <div className="identity-plan-card-heading">
+                          <div>
+                            <h3>
+                              {section.label}
+                            </h3>
+
+                            <span>
+                              {formatCount(
+                                section.workbookRecords,
+                              )}{" "}
+                              workbook records
+                            </span>
+                          </div>
+
+                          <span
+                            className={
+                              section.invalidRecords >
+                              0
+                                ? "master-import-source-pill master-import-source-pill-review"
+                                : section.unresolvedReferences >
+                                    0
+                                  ? "master-import-source-pill master-import-source-pill-deferred"
+                                  : "master-import-source-pill master-import-source-pill-good"
+                            }
+                          >
+                            {section.invalidRecords >
+                            0
+                              ? "Review"
+                              : section.unresolvedReferences >
+                                  0
+                                ? "Compared + Deferred"
+                                : "Compared"}
+                          </span>
+                        </div>
+
+                        <div className="value-plan-stat-grid">
+                          <div className="identity-plan-stat">
+                            <span>
+                              Existing DB
+                            </span>
+                            <strong>
+                              {formatCount(
+                                section.databaseRecords,
+                              )}
+                            </strong>
+                          </div>
+
+                          <div className="identity-plan-stat identity-plan-stat-new">
+                            <span>New</span>
+                            <strong>
+                              {formatCount(
+                                section.newRecords,
+                              )}
+                            </strong>
+                          </div>
+
+                          <div className="identity-plan-stat identity-plan-stat-good">
+                            <span>
+                              Unchanged
+                            </span>
+                            <strong>
+                              {formatCount(
+                                section.unchangedRecords,
+                              )}
+                            </strong>
+                          </div>
+
+                          <div className="identity-plan-stat value-plan-stat-changed">
+                            <span>Changed</span>
+                            <strong>
+                              {formatCount(
+                                section.changedRecords,
+                              )}
+                            </strong>
+                          </div>
+
+                          <div className="identity-plan-stat identity-plan-stat-error">
+                            <span>Invalid</span>
+                            <strong>
+                              {formatCount(
+                                section.invalidRecords,
+                              )}
+                            </strong>
+                          </div>
+
+                          <div className="identity-plan-stat value-plan-stat-deferred">
+                            <span>Deferred Refs</span>
+                            <strong>
+                              {formatCount(
+                                section.unresolvedReferences,
+                              )}
+                            </strong>
+                          </div>
+
+                          <div className="identity-plan-stat">
+                            <span>DB Only</span>
+                            <strong>
+                              {formatCount(
+                                section.databaseOnlyRecords,
+                              )}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div className="value-plan-fields">
+                          <span>
+                            Compared fields
+                          </span>
+
+                          <div>
+                            {section.comparedFields.map(
+                              (field) => (
+                                <span
+                                  key={field}
+                                  className="value-plan-field-pill"
+                                >
+                                  {field}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        </div>
+
+                        {section.examples.length >
+                          0 && (
+                          <details className="identity-plan-examples">
+                            <summary>
+                              Show value
+                              examples
+                            </summary>
+
+                            <div className="identity-example-list">
+                              {section.examples.map(
+                                (
+                                  example,
+                                  index,
+                                ) => (
+                                  <div
+                                    key={`${example.source}-${index}`}
+                                    className="identity-example-row value-example-row"
+                                  >
+                                    <div className="identity-example-main">
+                                      <span
+                                        className={valueStatusClass(
+                                          example.status,
+                                        )}
+                                      >
+                                        {valueStatusLabel(
+                                          example.status,
+                                        )}
+                                      </span>
+
+                                      <div>
+                                        <strong>
+                                          {example.displayName}
+                                        </strong>
+
+                                        <span>
+                                          {example.source}
+                                        </span>
+
+                                        {example.recordId && (
+                                          <code className="value-example-record-id">
+                                            {example.recordId}
+                                          </code>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="identity-example-detail">
+                                      <p>
+                                        {example.detail}
+                                      </p>
+
+                                      {example.differences.length >
+                                        0 && (
+                                        <div className="value-difference-list">
+                                          {example.differences.map(
+                                            (difference) => (
+                                              <div
+                                                key={`${example.source}-${difference.field}`}
+                                                className="value-difference-row"
+                                              >
+                                                <strong>
+                                                  {difference.field}
+                                                </strong>
+
+                                                <div>
+                                                  <span>
+                                                    Workbook
+                                                  </span>
+                                                  <code>
+                                                    {difference.workbookValue}
+                                                  </code>
+                                                </div>
+
+                                                <div>
+                                                  <span>
+                                                    Database
+                                                  </span>
+                                                  <code>
+                                                    {difference.databaseValue}
+                                                  </code>
+                                                </div>
+                                              </div>
+                                            ),
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          </details>
+                        )}
+                      </article>
+                    ),
+                  )}
+                </div>
+              </section>
+
+              {valuePlan.issues.length >
+                0 && (
+                <section className="manager-panel value-plan-issues-panel">
+                  <div className="manager-panel-header">
+                    <div>
+                      <h2>
+                        Value Review
+                        Items
+                      </h2>
+
+                      <p>
+                        Blocking value
+                        errors must be
+                        resolved before a
+                        future database
+                        import is enabled.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="identity-issue-list">
+                    {valuePlan.issues.map(
+                      (issue, index) => (
+                        <div
+                          key={`${issue.section}-${issue.source}-${index}`}
+                          className="identity-issue-row"
+                        >
+                          <span className="identity-issue-icon">
+                            !
+                          </span>
+
+                          <div>
+                            <strong>
+                              {issue.section}
+                            </strong>
+                            <span>
+                              {issue.source}
+                            </span>
+                            <p>
+                              {issue.message}
+                            </p>
+                          </div>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {valuePlan.deferredReferences.length >
+                0 && (
+                <section className="manager-panel value-plan-deferred-panel">
+                  <div className="manager-panel-header">
+                    <div>
+                      <h2>
+                        Deferred Token
+                        References
+                      </h2>
+
+                      <p>
+                        These are valid
+                        forward references,
+                        not bad workbook
+                        data. A Character
+                        Level can require a
+                        token before that
+                        token has been
+                        defined elsewhere
+                        in the Master.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="identity-issue-list">
+                    {valuePlan.deferredReferences.map(
+                      (reference, index) => (
+                        <div
+                          key={`${reference.section}-${reference.source}-${index}`}
+                          className="identity-issue-row value-plan-deferred-row"
+                        >
+                          <span className="identity-issue-icon value-plan-deferred-icon">
+                            ~
+                          </span>
+
+                          <div>
+                            <strong>
+                              {reference.section}
+                            </strong>
+                            <span>
+                              {reference.source}
+                            </span>
+                            <p>
+                              {reference.message}
+                            </p>
+                          </div>
+                        </div>
+                      ),
+                    )}
+                  </div>
+
+                  <div className="value-plan-deferred-note">
+                    These references do not
+                    block the read-only
+                    comparison. Database
+                    writing will remain
+                    disabled until the
+                    importer can preserve
+                    them safely and link
+                    them when the missing
+                    token is added later.
+                  </div>
+                </section>
+              )}
+
+              <section className="manager-panel value-plan-notes-panel">
+                <div className="manager-panel-header">
+                  <div>
+                    <h2>
+                      Comparison Notes
+                    </h2>
+
+                    <p>
+                      Fields intentionally
+                      included or excluded
+                      from this dry-run.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="identity-plan-note-list">
+                  {valuePlan.notes.map(
+                    (note, index) => (
+                      <div
+                        key={`${index}-${note}`}
+                        className="identity-plan-note"
+                      >
+                        <span>✓</span>
+                        <p>{note}</p>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </section>
+            </>
+          )}
+
           <section className="manager-panel master-import-sheets-panel">
             <div className="manager-panel-header">
               <div>
@@ -1332,29 +1990,22 @@ function MasterImportPage() {
           <section className="manager-panel master-import-next-panel">
             <div>
               <div className="manager-eyebrow">
-                FUTURE IMPORT STAGE
+                NEXT IMPORT STAGE
               </div>
 
               <h2>
-                Compare Field
-                Values
+                Database Import
               </h2>
 
               <p>
-                After identity
-                mapping is proven
-                correct, the next
-                dry-run stage will
-                compare the actual
-                workbook values for
-                token type and
-                rarity, Magic,
-                level times, and
-                token requirements.
-                Database writing
-                will remain disabled
-                until those results
-                are verified too.
+                Once the actual value
+                comparison is verified,
+                the next stage will build
+                the controlled database
+                write transaction. Import
+                remains disabled until the
+                dry-run results are proven
+                correct.
               </p>
             </div>
 
