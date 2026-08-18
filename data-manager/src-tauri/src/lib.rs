@@ -12,11 +12,23 @@ fn editor_migrations() -> Vec<Migration> {
     vec![
         Migration {
             version: 1,
-            description: "create_editor_schema",
+            description:
+                "create_editor_schema",
             sql: include_str!(
                 "../migrations/001_editor_initial.sql"
             ),
-            kind: MigrationKind::Up,
+            kind:
+                MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description:
+                "add_deferred_token_requirements",
+            sql: include_str!(
+                "../migrations/002_editor_deferred_token_requirements.sql"
+            ),
+            kind:
+                MigrationKind::Up,
         },
     ]
 }
