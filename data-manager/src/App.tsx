@@ -1,8 +1,14 @@
 import {
   useCallback,
+  useRef,
   useState,
 } from "react";
 
+import {
+  confirm,
+} from "@tauri-apps/plugin-dialog";
+
+import AttractionsEditorPage from "./pages/AttractionsEditorPage";
 import CharacterLevelsEditorPage from "./pages/CharacterLevelsEditorPage";
 import CharactersEditorPage from "./pages/CharactersEditorPage";
 import CollectionsEditorPage from "./pages/CollectionsEditorPage";
@@ -16,6 +22,7 @@ type ManagerPage =
   | "characters"
   | "tokens"
   | "character-levels"
+  | "attractions"
   | "master-import";
 
 function App() {
@@ -32,11 +39,17 @@ function App() {
     setPageDirty,
   ] = useState(false);
 
+  const pageDirtyRef =
+    useRef(false);
+
   const handleDirtyChange =
     useCallback(
       (
         dirty: boolean,
       ) => {
+        pageDirtyRef.current =
+          dirty;
+
         setPageDirty(
           dirty,
         );
@@ -44,7 +57,7 @@ function App() {
       [],
     );
 
-  function navigate(
+  async function navigate(
     destination: ManagerPage,
   ) {
     if (
@@ -55,13 +68,30 @@ function App() {
     }
 
     if (
-      pageDirty &&
-      !window.confirm(
-        "You have unsaved changes. Discard them and leave this section?",
-      )
+      pageDirtyRef.current ||
+      pageDirty
     ) {
-      return;
+      const discardChanges =
+        await confirm(
+          "You have unsaved changes. Discard them and leave this section?",
+          {
+            title:
+              "DMK Data Manager",
+            kind: "warning",
+            okLabel:
+              "Discard Changes",
+            cancelLabel:
+              "Keep Editing",
+          },
+        );
+
+      if (!discardChanges) {
+        return;
+      }
     }
+
+    pageDirtyRef.current =
+      false;
 
     setPageDirty(false);
 
@@ -123,6 +153,19 @@ function App() {
       );
     }
 
+    if (
+      activePage ===
+      "attractions"
+    ) {
+      return (
+        <AttractionsEditorPage
+          onDirtyChange={
+            handleDirtyChange
+          }
+        />
+      );
+    }
+
     return (
       <MasterImportPage />
     );
@@ -161,7 +204,7 @@ function App() {
                 : "manager-nav-button"
             }
             onClick={() =>
-              navigate(
+              void navigate(
                 "collections",
               )
             }
@@ -178,7 +221,7 @@ function App() {
                 : "manager-nav-button"
             }
             onClick={() =>
-              navigate(
+              void navigate(
                 "characters",
               )
             }
@@ -195,7 +238,7 @@ function App() {
                 : "manager-nav-button"
             }
             onClick={() =>
-              navigate(
+              void navigate(
                 "tokens",
               )
             }
@@ -212,12 +255,29 @@ function App() {
                 : "manager-nav-button"
             }
             onClick={() =>
-              navigate(
+              void navigate(
                 "character-levels",
               )
             }
           >
             Character Levels
+          </button>
+
+          <button
+            type="button"
+            className={
+              activePage ===
+              "attractions"
+                ? "manager-nav-button manager-nav-button-active"
+                : "manager-nav-button"
+            }
+            onClick={() =>
+              void navigate(
+                "attractions",
+              )
+            }
+          >
+            Attractions
           </button>
         </div>
 
@@ -247,7 +307,7 @@ function App() {
                 : "manager-nav-button"
             }
             onClick={() =>
-              navigate(
+              void navigate(
                 "master-import",
               )
             }
@@ -290,8 +350,7 @@ function App() {
           </span>
 
           <span>
-            Player progress is
-            separate.
+            Player progress is separate.
           </span>
         </div>
       </aside>

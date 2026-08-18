@@ -5,6 +5,10 @@ import {
 } from "react";
 
 import {
+  confirm,
+} from "@tauri-apps/plugin-dialog";
+
+import {
   createCollection,
   loadCollections,
   previewCollectionStableId,
@@ -252,13 +256,19 @@ function CollectionsEditorPage({
     };
   }, []);
 
-  function confirmDiscard() {
+  async function confirmDiscard() {
     if (!isDirty) {
       return true;
     }
 
-    return window.confirm(
+    return confirm(
       "You have unsaved collection changes. Discard them?",
+      {
+        title: "Unsaved Changes",
+        kind: "warning",
+        okLabel: "Discard Changes",
+        cancelLabel: "Keep Editing",
+      },
     );
   }
 
@@ -267,8 +277,8 @@ function CollectionsEditorPage({
     setSaveMessage(null);
   }
 
-  function startCreate() {
-    if (!confirmDiscard()) {
+  async function startCreate() {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -291,10 +301,10 @@ function CollectionsEditorPage({
     clearMessages();
   }
 
-  function startEdit(
+  async function startEdit(
     collection: CollectionRecord,
   ) {
-    if (!confirmDiscard()) {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -320,8 +330,8 @@ function CollectionsEditorPage({
     clearMessages();
   }
 
-  function cancelEditor() {
-    if (!confirmDiscard()) {
+  async function cancelEditor() {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -503,8 +513,8 @@ function CollectionsEditorPage({
         <button
           type="button"
           className="primary-button"
-          onClick={
-            startCreate
+          onClick={() =>
+            void startCreate()
           }
         >
           + Add Collection
@@ -690,7 +700,7 @@ function CollectionsEditorPage({
                             type="button"
                             className="table-edit-button"
                             onClick={() =>
-                              startEdit(
+                              void startEdit(
                                 collection,
                               )
                             }
@@ -730,8 +740,8 @@ function CollectionsEditorPage({
               <button
                 type="button"
                 className="primary-button"
-                onClick={
-                  startCreate
+                onClick={() =>
+                  void startCreate()
                 }
               >
                 Add Collection
@@ -961,8 +971,8 @@ function CollectionsEditorPage({
                     disabled={
                       saving
                     }
-                    onClick={
-                      cancelEditor
+                    onClick={() =>
+                      void cancelEditor()
                     }
                   >
                     Cancel

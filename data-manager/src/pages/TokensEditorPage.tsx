@@ -5,6 +5,10 @@ import {
 } from "react";
 
 import {
+  confirm,
+} from "@tauri-apps/plugin-dialog";
+
+import {
   createToken,
   getNextTokenSortOrder,
   loadCharacters,
@@ -408,13 +412,19 @@ function TokensEditorPage({
     };
   }, []);
 
-  function confirmDiscard() {
+  async function confirmDiscard() {
     if (!isDirty) {
       return true;
     }
 
-    return window.confirm(
+    return confirm(
       "You have unsaved token changes. Discard them?",
+      {
+        title: "Unsaved Changes",
+        kind: "warning",
+        okLabel: "Discard Changes",
+        cancelLabel: "Keep Editing",
+      },
     );
   }
 
@@ -423,7 +433,7 @@ function TokensEditorPage({
   }
 
   async function startCreate() {
-    if (!confirmDiscard()) {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -466,10 +476,10 @@ function TokensEditorPage({
     }
   }
 
-  function startEdit(
+  async function startEdit(
     token: TokenRecord,
   ) {
-    if (!confirmDiscard()) {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -495,8 +505,8 @@ function TokensEditorPage({
     clearMessages();
   }
 
-  function cancelEditor() {
-    if (!confirmDiscard()) {
+  async function cancelEditor() {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -1019,7 +1029,7 @@ function TokensEditorPage({
                             type="button"
                             className="table-edit-button"
                             onClick={() =>
-                              startEdit(
+                              void startEdit(
                                 token,
                               )
                             }
@@ -1435,8 +1445,8 @@ function TokensEditorPage({
                     disabled={
                       saving
                     }
-                    onClick={
-                      cancelEditor
+                    onClick={() =>
+                      void cancelEditor()
                     }
                   >
                     Cancel

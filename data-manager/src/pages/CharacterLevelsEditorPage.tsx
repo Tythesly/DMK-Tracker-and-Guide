@@ -5,6 +5,10 @@ import {
 } from "react";
 
 import {
+  confirm,
+} from "@tauri-apps/plugin-dialog";
+
+import {
   loadCharacterLevels,
   saveCharacterLevel,
 } from "../data/characterLevelData";
@@ -675,13 +679,19 @@ function CharacterLevelsEditorPage({
     };
   }, [selectedCharacterId]);
 
-  function confirmDiscard() {
+  async function confirmDiscard() {
     if (!isDirty) {
       return true;
     }
 
-    return window.confirm(
+    return confirm(
       "You have unsaved Character Level changes. Discard them?",
+      {
+        title: "Unsaved Changes",
+        kind: "warning",
+        okLabel: "Discard Changes",
+        cancelLabel: "Keep Editing",
+      },
     );
   }
 
@@ -703,18 +713,18 @@ function CharacterLevelsEditorPage({
     setFormError(null);
   }
 
-  function cancelEditor() {
-    if (!confirmDiscard()) {
+  async function cancelEditor() {
+    if (!(await confirmDiscard())) {
       return;
     }
 
     closeEditor();
   }
 
-  function startEdit(
+  async function startEdit(
     targetLevel: number,
   ) {
-    if (!confirmDiscard()) {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -763,7 +773,7 @@ function CharacterLevelsEditorPage({
     setFormError(null);
   }
 
-  function handleCharacterChange(
+  async function handleCharacterChange(
     characterId: string,
   ) {
     if (
@@ -773,7 +783,7 @@ function CharacterLevelsEditorPage({
       return;
     }
 
-    if (!confirmDiscard()) {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -1183,7 +1193,7 @@ function CharacterLevelsEditorPage({
             onChange={(
               event,
             ) =>
-              handleCharacterChange(
+              void handleCharacterChange(
                 event
                   .currentTarget
                   .value,
@@ -1393,7 +1403,7 @@ function CharacterLevelsEditorPage({
                             type="button"
                             className="table-edit-button"
                             onClick={() =>
-                              startEdit(
+                              void startEdit(
                                 targetLevel,
                               )
                             }
@@ -1799,8 +1809,8 @@ function CharacterLevelsEditorPage({
                     disabled={
                       saving
                     }
-                    onClick={
-                      cancelEditor
+                    onClick={() =>
+                      void cancelEditor()
                     }
                   >
                     Cancel

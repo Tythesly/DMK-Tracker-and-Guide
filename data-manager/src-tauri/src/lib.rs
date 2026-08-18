@@ -1,3 +1,4 @@
+mod attraction_commands;
 mod editor_commands;
 mod master_import;
 mod master_import_plan;
@@ -64,6 +65,8 @@ pub fn run() {
                 editor_commands::create_character_with_sort,
                 editor_commands::update_character_with_sort,
                 editor_commands::save_character_level,
+                attraction_commands::create_attraction_with_sort,
+                attraction_commands::update_attraction_with_sort,
                 master_import::inspect_master_workbook,
                 master_import_plan::build_master_import_identity_plan,
                 master_import_value_plan::build_master_import_value_plan,

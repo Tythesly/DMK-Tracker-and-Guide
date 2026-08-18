@@ -5,6 +5,10 @@ import {
 } from "react";
 
 import {
+  confirm,
+} from "@tauri-apps/plugin-dialog";
+
+import {
   createCharacter,
   getNextCharacterSortOrder,
   loadCharacters,
@@ -283,13 +287,19 @@ function CharactersEditorPage({
     };
   }, []);
 
-  function confirmDiscard() {
+  async function confirmDiscard() {
     if (!isDirty) {
       return true;
     }
 
-    return window.confirm(
+    return confirm(
       "You have unsaved character changes. Discard them?",
+      {
+        title: "Unsaved Changes",
+        kind: "warning",
+        okLabel: "Discard Changes",
+        cancelLabel: "Keep Editing",
+      },
     );
   }
 
@@ -305,7 +315,7 @@ function CharactersEditorPage({
       return;
     }
 
-    if (!confirmDiscard()) {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -350,10 +360,10 @@ function CharactersEditorPage({
     }
   }
 
-  function startEdit(
+  async function startEdit(
     character: CharacterRecord,
   ) {
-    if (!confirmDiscard()) {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -379,8 +389,8 @@ function CharactersEditorPage({
     clearMessages();
   }
 
-  function cancelEditor() {
-    if (!confirmDiscard()) {
+  async function cancelEditor() {
+    if (!(await confirmDiscard())) {
       return;
     }
 
@@ -817,7 +827,7 @@ function CharactersEditorPage({
                             type="button"
                             className="table-edit-button"
                             onClick={() =>
-                              startEdit(
+                              void startEdit(
                                 character,
                               )
                             }
@@ -1168,8 +1178,8 @@ function CharactersEditorPage({
                     disabled={
                       saving
                     }
-                    onClick={
-                      cancelEditor
+                    onClick={() =>
+                      void cancelEditor()
                     }
                   >
                     Cancel
