@@ -33,9 +33,19 @@ fn editor_migrations() -> Vec<Migration> {
         Migration {
             version: 3,
             description:
-                "add_attractions",
+                "add_attraction_authoring_schema",
             sql: include_str!(
                 "../migrations/003_editor_attractions.sql"
+            ),
+            kind:
+                MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description:
+                "add_attraction_enchantment_defaults",
+            sql: include_str!(
+                "../migrations/004_editor_attraction_enchantment_defaults.sql"
             ),
             kind:
                 MigrationKind::Up,
