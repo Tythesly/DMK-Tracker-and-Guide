@@ -38,13 +38,10 @@ type MasterWorkbookInspection = {
   workbookId: string | null;
   workbookVersion:
     string | null;
-
   structureVersion:
     string | null;
-
   workbookType:
     string | null;
-
   metadataValid: boolean;
 
   sheetCount: number;
@@ -53,11 +50,46 @@ type MasterWorkbookInspection = {
 
   sheets:
     WorkbookSheetInspection[];
-
   coreSources:
     CoreSourceInspection[];
-
   warnings: string[];
+};
+
+type IdentityPlanExample = {
+  status: string;
+  source: string;
+  displayName: string;
+  proposedId: string | null;
+  matchedId: string | null;
+  detail: string;
+};
+
+type IdentityPlanIssue = {
+  section: string;
+  source: string;
+  message: string;
+};
+
+type IdentityPlanSection = {
+  key: string;
+  label: string;
+  workbookRecords: number;
+  databaseRecords: number;
+  matchedRecords: number;
+  newRecords: number;
+  ambiguousRecords: number;
+  invalidRecords: number;
+  databaseOnlyRecords: number;
+  examples: IdentityPlanExample[];
+};
+
+type MasterImportIdentityPlan = {
+  fileName: string;
+  workbookVersion: string | null;
+  planReady: boolean;
+  sections: IdentityPlanSection[];
+  issues: IdentityPlanIssue[];
+  notes: string[];
 };
 
 function formatFileSize(
@@ -97,6 +129,74 @@ function displayValue(
   return value;
 }
 
+function formatCount(
+  value: number,
+) {
+  return value.toLocaleString(
+    "en-US",
+  );
+}
+
+function planStatusLabel(
+  status: string,
+) {
+  switch (
+    status
+      .trim()
+      .toLowerCase()
+  ) {
+    case "matched":
+      return "Matched";
+
+    case "new":
+      return "New";
+
+    case "ambiguous":
+      return "Ambiguous";
+
+    case "invalid":
+      return "Invalid";
+
+    default:
+      return status;
+  }
+}
+
+function planStatusClass(
+  status: string,
+) {
+  const normalized =
+    status
+      .trim()
+      .toLowerCase();
+
+  if (
+    normalized === "matched"
+  ) {
+    return "identity-example-status identity-example-status-matched";
+  }
+
+  if (
+    normalized === "new"
+  ) {
+    return "identity-example-status identity-example-status-new";
+  }
+
+  if (
+    normalized === "ambiguous"
+  ) {
+    return "identity-example-status identity-example-status-review";
+  }
+
+  if (
+    normalized === "invalid"
+  ) {
+    return "identity-example-status identity-example-status-error";
+  }
+
+  return "identity-example-status";
+}
+
 function MasterImportPage() {
   const [
     inspection,
@@ -107,8 +207,28 @@ function MasterImportPage() {
     >(null);
 
   const [
+    selectedPath,
+    setSelectedPath,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
+    identityPlan,
+    setIdentityPlan,
+  ] =
+    useState<
+      MasterImportIdentityPlan | null
+    >(null);
+
+  const [
     inspecting,
     setInspecting,
+  ] = useState(false);
+
+  const [
+    buildingPlan,
+    setBuildingPlan,
   ] = useState(false);
 
   const [
@@ -119,8 +239,17 @@ function MasterImportPage() {
       null,
     );
 
+  const [
+    planError,
+    setPlanError,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
   async function selectWorkbook() {
     setError(null);
+    setPlanError(null);
 
     const selected =
       await open({
@@ -163,6 +292,10 @@ function MasterImportPage() {
 
     setInspecting(true);
     setInspection(null);
+    setIdentityPlan(null);
+    setSelectedPath(
+      selected,
+    );
 
     try {
       const result =
@@ -185,6 +318,8 @@ function MasterImportPage() {
         caughtError,
       );
 
+      setSelectedPath(null);
+
       setError(
         caughtError instanceof
           Error
@@ -200,6 +335,54 @@ function MasterImportPage() {
     }
   }
 
+  async function buildIdentityPlan() {
+    if (
+      !selectedPath ||
+      !inspection?.readyForMapping
+    ) {
+      return;
+    }
+
+    setPlanError(null);
+    setBuildingPlan(true);
+    setIdentityPlan(null);
+
+    try {
+      const result =
+        await invoke<
+          MasterImportIdentityPlan
+        >(
+          "build_master_import_identity_plan",
+          {
+            path:
+              selectedPath,
+          },
+        );
+
+      setIdentityPlan(
+        result,
+      );
+    } catch (caughtError) {
+      console.error(
+        "Master import identity plan failed:",
+        caughtError,
+      );
+
+      setPlanError(
+        caughtError instanceof
+          Error
+          ? caughtError.message
+          : String(
+              caughtError,
+            ),
+      );
+    } finally {
+      setBuildingPlan(
+        false,
+      );
+    }
+  }
+
   const statusLabel =
     inspection === null
       ? "No workbook selected"
@@ -207,6 +390,13 @@ function MasterImportPage() {
             .readyForMapping
         ? "Ready for mapping"
         : "Review required";
+
+  const identityPlanStatus =
+    identityPlan === null
+      ? "Not built"
+      : identityPlan.planReady
+        ? "Identity mapping ready"
+        : "Identity review required";
 
   return (
     <>
@@ -223,22 +413,24 @@ function MasterImportPage() {
           <p>
             Inspect the
             authoritative DMK
-            Master workbook
-            before importing
-            game data into the
-            authoring database.
+            Master workbook and
+            build a read-only
+            identity mapping plan
+            before any game data
+            can be imported.
           </p>
         </div>
       </header>
 
       <div className="manager-warning-banner">
         <strong>
-          Read-only inspection
+          Read-only planning
         </strong>
 
         <span>
-          This first stage does
-          not add, update, or
+          Inspection and identity
+          mapping do not add,
+          update, deactivate, or
           remove anything in
           dmk-editor.db.
         </span>
@@ -257,6 +449,18 @@ function MasterImportPage() {
         </div>
       )}
 
+      {planError && (
+        <div className="manager-error-banner">
+          <strong>
+            Identity plan failed
+          </strong>
+
+          <span>
+            {planError}
+          </span>
+        </div>
+      )}
+
       <section className="manager-panel master-import-picker">
         <div>
           <div className="master-import-picker-title">
@@ -269,10 +473,11 @@ function MasterImportPage() {
             DMK Master .xlsm or
             .xlsx file. The
             inspector scans for
-            known headers instead
-            of depending on fixed
-            worksheet row
-            numbers.
+            known workbook data
+            before the identity
+            mapper compares those
+            records with the
+            authoring database.
           </p>
         </div>
 
@@ -280,7 +485,8 @@ function MasterImportPage() {
           type="button"
           className="primary-button"
           disabled={
-            inspecting
+            inspecting ||
+            buildingPlan
           }
           onClick={() =>
             void selectWorkbook()
@@ -471,8 +677,8 @@ function MasterImportPage() {
                   four Data
                   Manager areas
                   currently ready
-                  to receive
-                  workbook data.
+                  for workbook
+                  mapping.
                 </p>
               </div>
             </div>
@@ -522,8 +728,8 @@ function MasterImportPage() {
                       </div>
 
                       <div className="master-import-source-count">
-                        {source.recordCount.toLocaleString(
-                          "en-US",
+                        {formatCount(
+                          source.recordCount,
                         )}
 
                         <span>
@@ -565,16 +771,16 @@ function MasterImportPage() {
               <div className="manager-panel-header">
                 <div>
                   <h2>
+                    Inspection
                     Review Items
                   </h2>
 
                   <p>
-                    Nothing will
-                    be imported
-                    while these
-                    results are
-                    being
-                    reviewed.
+                    These items
+                    come from the
+                    workbook
+                    inspection
+                    stage.
                   </p>
                 </div>
               </div>
@@ -607,6 +813,425 @@ function MasterImportPage() {
                   )}
               </div>
             </section>
+          )}
+
+          <section className="manager-panel identity-plan-action-panel">
+            <div>
+              <div className="manager-eyebrow">
+                DRY-RUN IMPORT PLAN
+              </div>
+
+              <h2>
+                Compare Record
+                Identities
+              </h2>
+
+              <p>
+                Compare workbook
+                collections,
+                characters,
+                tokens, and
+                character levels
+                against the
+                existing stable
+                identities in
+                dmk-editor.db.
+                This does not
+                write to the
+                database.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="primary-button"
+              disabled={
+                !inspection
+                  .readyForMapping ||
+                !selectedPath ||
+                buildingPlan
+              }
+              onClick={() =>
+                void buildIdentityPlan()
+              }
+            >
+              {buildingPlan
+                ? "Building Plan..."
+                : identityPlan
+                  ? "Rebuild Identity Plan"
+                  : "Build Identity Plan"}
+            </button>
+          </section>
+
+          {identityPlan && (
+            <>
+              <section className="database-status-bar identity-plan-status-bar">
+                <div>
+                  <strong>
+                    Identity
+                    Mapping Plan
+                  </strong>
+
+                  <span>
+                    {identityPlan
+                      .workbookVersion ??
+                      identityPlan.fileName}
+                  </span>
+                </div>
+
+                <div
+                  className={
+                    identityPlan
+                      .planReady
+                      ? "database-status-pill"
+                      : "master-import-review-pill"
+                  }
+                >
+                  {identityPlanStatus}
+                </div>
+              </section>
+
+              <section className="manager-panel identity-plan-panel">
+                <div className="manager-panel-header">
+                  <div>
+                    <h2>
+                      Identity
+                      Mapping Summary
+                    </h2>
+
+                    <p>
+                      Workbook records
+                      are being compared
+                      with existing
+                      stable IDs and
+                      aliases. Database-
+                      only records are
+                      reported, not
+                      deleted.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="identity-plan-grid">
+                  {identityPlan
+                    .sections
+                    .map(
+                      (
+                        section,
+                      ) => (
+                        <article
+                          key={
+                            section.key
+                          }
+                          className="identity-plan-card"
+                        >
+                          <div className="identity-plan-card-heading">
+                            <div>
+                              <h3>
+                                {
+                                  section.label
+                                }
+                              </h3>
+
+                              <span>
+                                {formatCount(
+                                  section.workbookRecords,
+                                )}{" "}
+                                workbook records
+                              </span>
+                            </div>
+
+                            <span
+                              className={
+                                section.ambiguousRecords ===
+                                  0 &&
+                                section.invalidRecords ===
+                                  0
+                                  ? "master-import-source-pill master-import-source-pill-good"
+                                  : "master-import-source-pill master-import-source-pill-review"
+                              }
+                            >
+                              {section.ambiguousRecords ===
+                                0 &&
+                              section.invalidRecords ===
+                                0
+                                ? "Resolved"
+                                : "Review"}
+                            </span>
+                          </div>
+
+                          <div className="identity-plan-stat-grid">
+                            <div className="identity-plan-stat">
+                              <span>
+                                Existing DB
+                              </span>
+
+                              <strong>
+                                {formatCount(
+                                  section.databaseRecords,
+                                )}
+                              </strong>
+                            </div>
+
+                            <div className="identity-plan-stat identity-plan-stat-good">
+                              <span>
+                                Matched
+                              </span>
+
+                              <strong>
+                                {formatCount(
+                                  section.matchedRecords,
+                                )}
+                              </strong>
+                            </div>
+
+                            <div className="identity-plan-stat identity-plan-stat-new">
+                              <span>
+                                New
+                              </span>
+
+                              <strong>
+                                {formatCount(
+                                  section.newRecords,
+                                )}
+                              </strong>
+                            </div>
+
+                            <div className="identity-plan-stat identity-plan-stat-review">
+                              <span>
+                                Ambiguous
+                              </span>
+
+                              <strong>
+                                {formatCount(
+                                  section.ambiguousRecords,
+                                )}
+                              </strong>
+                            </div>
+
+                            <div className="identity-plan-stat identity-plan-stat-error">
+                              <span>
+                                Invalid
+                              </span>
+
+                              <strong>
+                                {formatCount(
+                                  section.invalidRecords,
+                                )}
+                              </strong>
+                            </div>
+
+                            <div className="identity-plan-stat">
+                              <span>
+                                DB Only
+                              </span>
+
+                              <strong>
+                                {formatCount(
+                                  section.databaseOnlyRecords,
+                                )}
+                              </strong>
+                            </div>
+                          </div>
+
+                          {section
+                            .examples.length >
+                            0 && (
+                            <details className="identity-plan-examples">
+                              <summary>
+                                Show mapping
+                                examples
+                              </summary>
+
+                              <div className="identity-example-list">
+                                {section
+                                  .examples
+                                  .map(
+                                    (
+                                      example,
+                                      index,
+                                    ) => (
+                                      <div
+                                        key={
+                                          `${example.source}-${index}`
+                                        }
+                                        className="identity-example-row"
+                                      >
+                                        <div className="identity-example-main">
+                                          <span
+                                            className={planStatusClass(
+                                              example.status,
+                                            )}
+                                          >
+                                            {planStatusLabel(
+                                              example.status,
+                                            )}
+                                          </span>
+
+                                          <div>
+                                            <strong>
+                                              {
+                                                example.displayName
+                                              }
+                                            </strong>
+
+                                            <span>
+                                              {
+                                                example.source
+                                              }
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <div className="identity-example-detail">
+                                          <p>
+                                            {
+                                              example.detail
+                                            }
+                                          </p>
+
+                                          <div className="identity-example-ids">
+                                            {example.proposedId && (
+                                              <span>
+                                                Proposed:{" "}
+                                                <code>
+                                                  {
+                                                    example.proposedId
+                                                  }
+                                                </code>
+                                              </span>
+                                            )}
+
+                                            {example.matchedId && (
+                                              <span>
+                                                Matched:{" "}
+                                                <code>
+                                                  {
+                                                    example.matchedId
+                                                  }
+                                                </code>
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ),
+                                  )}
+                              </div>
+                            </details>
+                          )}
+                        </article>
+                      ),
+                    )}
+                </div>
+              </section>
+
+              {identityPlan
+                .issues.length >
+                0 && (
+                <section className="manager-panel identity-plan-issues-panel">
+                  <div className="manager-panel-header">
+                    <div>
+                      <h2>
+                        Identity
+                        Review Items
+                      </h2>
+
+                      <p>
+                        Ambiguous or
+                        invalid mappings
+                        must be understood
+                        before we allow a
+                        future import.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="identity-issue-list">
+                    {identityPlan
+                      .issues
+                      .map(
+                        (
+                          issue,
+                          index,
+                        ) => (
+                          <div
+                            key={
+                              `${issue.section}-${issue.source}-${index}`
+                            }
+                            className="identity-issue-row"
+                          >
+                            <span className="identity-issue-icon">
+                              !
+                            </span>
+
+                            <div>
+                              <strong>
+                                {
+                                  issue.section
+                                }
+                              </strong>
+
+                              <span>
+                                {
+                                  issue.source
+                                }
+                              </span>
+
+                              <p>
+                                {
+                                  issue.message
+                                }
+                              </p>
+                            </div>
+                          </div>
+                        ),
+                      )}
+                  </div>
+                </section>
+              )}
+
+              <section className="manager-panel identity-plan-notes-panel">
+                <div className="manager-panel-header">
+                  <div>
+                    <h2>
+                      Plan Notes
+                    </h2>
+
+                    <p>
+                      Safety rules for
+                      this dry-run stage.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="identity-plan-note-list">
+                  {identityPlan
+                    .notes
+                    .map(
+                      (
+                        note,
+                        index,
+                      ) => (
+                        <div
+                          key={
+                            `${index}-${note}`
+                          }
+                          className="identity-plan-note"
+                        >
+                          <span>
+                            ✓
+                          </span>
+
+                          <p>
+                            {note}
+                          </p>
+                        </div>
+                      ),
+                    )}
+                </div>
+              </section>
+            </>
           )}
 
           <section className="manager-panel master-import-sheets-panel">
@@ -670,14 +1295,14 @@ function MasterImportPage() {
                           </td>
 
                           <td className="number-column">
-                            {sheet.rows.toLocaleString(
-                              "en-US",
+                            {formatCount(
+                              sheet.rows,
                             )}
                           </td>
 
                           <td className="number-column">
-                            {sheet.columns.toLocaleString(
-                              "en-US",
+                            {formatCount(
+                              sheet.columns,
                             )}
                           </td>
 
@@ -707,30 +1332,29 @@ function MasterImportPage() {
           <section className="manager-panel master-import-next-panel">
             <div>
               <div className="manager-eyebrow">
-                NEXT STAGE
+                FUTURE IMPORT STAGE
               </div>
 
               <h2>
-                Build Import Plan
+                Compare Field
+                Values
               </h2>
 
               <p>
-                After the
-                inspector is
-                verified against
-                your real Master,
-                the next stage
-                will compare
-                workbook records
-                with existing
-                stable IDs,
-                identify inserts,
-                updates and
-                unchanged
-                records, and flag
-                ambiguous matches
-                before anything
-                is written.
+                After identity
+                mapping is proven
+                correct, the next
+                dry-run stage will
+                compare the actual
+                workbook values for
+                token type and
+                rarity, Magic,
+                level times, and
+                token requirements.
+                Database writing
+                will remain disabled
+                until those results
+                are verified too.
               </p>
             </div>
 
@@ -740,7 +1364,7 @@ function MasterImportPage() {
               disabled
             >
               Import to Database
-              — Next Stage
+              — Disabled
             </button>
           </section>
         </>
